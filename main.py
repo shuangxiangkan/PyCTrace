@@ -8,6 +8,7 @@ import sys
 import os
 import argparse
 from Utils import FileCollector
+from C.c_parser import extract_python_strings
 
 
 def main():
@@ -58,7 +59,31 @@ def main():
             return
         
         print("\n文件收集完成!")
-        print("下一步: 将实现代码解析和调用图构建功能...")
+        
+        # 提取C文件中的字符串（特别是Python代码片段）
+        if c_files:
+            print("\n正在提取C文件中的Python代码片段...")
+            print("=" * 50)
+            
+            for c_file in c_files:
+                try:
+                    python_snippets = extract_python_strings(c_file)
+                    if python_snippets:
+                        print(f"\n文件: {c_file}")
+                        print("-" * 30)
+                        print(f"提取的Python代码片段 ({len(python_snippets)} 个):")
+                        for i, snippet in enumerate(python_snippets, 1):
+                            print(f"\n{i}. Python代码片段:")
+                            print("```python")
+                            print(snippet)
+                            print("```")
+                    else:
+                        print(f"\n文件: {c_file} - 未找到Python代码片段")
+                        
+                except Exception as e:
+                    print(f"处理文件 {c_file} 时出错: {e}")
+        
+        print("\n字符串提取完成!")
         
     except Exception as e:
         print(f"错误: {e}")

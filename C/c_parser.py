@@ -1,13 +1,20 @@
 """
 C/C++代码解析器
-使用tree-sitter解析C/C++代码，提取函数名
+使用tree-sitter解析C/C++代码，提取函数名和字符串
 """
 
 import tree_sitter_c as tsc
 import tree_sitter_cpp as tscpp
 import tree_sitter
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import os
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from Utils.python_string import (
+    clean_string_literal, 
+    extract_python_from_strings
+)
 
 
 class CCodeParser:
@@ -18,15 +25,15 @@ class CCodeParser:
         self.c_language = tree_sitter.Language(tsc.language())
         self.cpp_language = tree_sitter.Language(tscpp.language())
     
-    def parse_file(self, file_path: str) -> Dict[str, Any]:
+    def _parse_source_code(self, file_path: str) -> Tuple[tree_sitter.Tree, str]:
         """
-        解析C/C++文件，提取函数名
+        解析C/C++源代码文件，返回AST和源代码
         
         Args:
             file_path: C/C++文件路径
             
         Returns:
-            Dict: 解析结果，包含函数名列表
+            tuple: (AST树, 源代码字符串)
         """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"文件不存在: {file_path}")
@@ -44,6 +51,20 @@ class CCodeParser:
         
         # 解析代码
         tree = parser.parse(bytes(source_code, 'utf8'))
+        
+        return tree, source_code
+    
+    def parse_file(self, file_path: str) -> Dict[str, Any]:
+        """
+        解析C/C++文件，提取函数名
+        
+        Args:
+            file_path: C/C++文件路径
+            
+        Returns:
+            Dict: 解析结果，包含函数名列表
+        """
+        tree, source_code = self._parse_source_code(file_path)
         
         # 提取函数名
         functions = self._extract_functions(tree.root_node, source_code)
@@ -105,8 +126,43 @@ class CCodeParser:
     def _get_node_text(self, node: tree_sitter.Node, source_code: str) -> str:
         """获取节点对应的源代码文本"""
         return source_code[node.start_byte:node.end_byte]
-
-
+    
+    def extract_strings(self, file_path: str) -> List[str]:
+        """
+        从C/C++文件中提取Python代码片段
+        
+        Args:
+            file_path: C/C++文件路径
+            
+        Returns:
+            List[str]: 提取的Python代码片段列表
+        """
+        tree, source_code = self._parse_source_code(file_path)
+        
+        # 提取所有字符串
+        raw_strings = self._extract_strings(tree.root_node, source_code)
+        
+        # 使用Utils中的字符串处理功能
+        return extract_python_from_strings(raw_strings)
+    
+    def _extract_strings(self, node: tree_sitter.Node, source_code: str) -> List[str]:
+        """提取字符串字面量"""
+        strings = []
+        
+        def traverse(node):
+            if node.type == 'string_literal':
+                string_content = self._get_node_text(node, source_code)
+                # 去掉引号并处理转义字符
+                cleaned_string = clean_string_literal(string_content)
+                if cleaned_string:
+                    strings.append(cleaned_string)
+            
+            for child in node.children:
+                traverse(child)
+        
+        traverse(node)
+        return strings
+    
 def parse_c_file(file_path: str) -> List[str]:
     """
     便捷函数：解析单个C文件，返回函数名列表
@@ -120,3 +176,17 @@ def parse_c_file(file_path: str) -> List[str]:
     parser = CCodeParser()
     result = parser.parse_file(file_path)
     return result['functions']
+
+
+def extract_python_strings(file_path: str) -> List[str]:
+    """
+    便利函数：从C/C++文件中提取Python代码片段
+    
+    Args:
+        file_path: C/C++文件路径
+        
+    Returns:
+        List[str]: Python代码片段列表
+    """
+    parser = CCodeParser()
+    return parser.extract_strings(file_path)
