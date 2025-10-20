@@ -1,0 +1,21 @@
+# PyCTrace项目依赖
+
+# 代码解析 - Tree-sitter
+tree-sitter==0.20.4
+tree-sitter-c==0.20.6
+tree-sitter-cpp==0.20.3
+tree-sitter-python==0.20.4
+
+# 数据结构和图处理
+networkx==3.2.1
+
+# 命令行工具
+click==8.1.7
+
+# 代码格式化和类型检查（开发依赖）
+black==23.10.1
+mypy==1.6.1
+
+# 测试框架（开发依赖）
+pytest==7.4.3
+pytest-cov==4.1.0
