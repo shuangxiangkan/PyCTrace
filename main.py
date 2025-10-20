@@ -8,7 +8,9 @@ import sys
 import os
 import argparse
 from Utils import FileCollector
+from Utils.graph_visualizer import visualize_call_graph
 from C.c_parser import extract_python_strings
+from Python.python_parser import PythonCodeParser
 
 
 def main():
@@ -61,6 +63,7 @@ def main():
         print("\n文件收集完成!")
         
         # 提取C文件中的字符串（特别是Python代码片段）
+        all_python_snippets = []
         if c_files:
             print("\n正在提取C文件中的Python代码片段...")
             print("=" * 50)
@@ -77,6 +80,7 @@ def main():
                             print("```python")
                             print(snippet)
                             print("```")
+                            all_python_snippets.append(snippet)
                     else:
                         print(f"\n文件: {c_file} - 未找到Python代码片段")
                         
@@ -84,6 +88,46 @@ def main():
                     print(f"处理文件 {c_file} 时出错: {e}")
         
         print("\n字符串提取完成!")
+        
+        # 分析Python代码片段并生成调用图
+        if all_python_snippets:
+            print("\n正在分析Python代码片段并生成调用图...")
+            print("=" * 50)
+            
+            try:
+                # 创建Python代码解析器
+                python_parser = PythonCodeParser()
+                
+                # 合并所有Python代码片段
+                combined_code = "\n\n".join(all_python_snippets)
+                
+                # 解析代码并生成调用图
+                parse_result = python_parser.parse_code_string(combined_code)
+                
+                if args.verbose:
+                    print(f"\n发现的函数: {parse_result['functions']}")
+                    print(f"函数调用关系: {parse_result['calls']}")
+                
+                # 生成调用图可视化
+                if parse_result['call_graph']:
+                    print("\n生成调用图可视化文件...")
+                    output_files = visualize_call_graph(
+                        parse_result['call_graph'],
+                        output_dir="output",
+                        filename_prefix="python_call_graph",
+                        title="Python Call Graph from C Code"
+                    )
+                    
+                    print(f"\n调用图文件已生成:")
+                    for format_type, file_path in output_files.items():
+                        print(f"  {format_type.upper()}: {file_path}")
+                else:
+                    print("\n未发现函数调用关系")
+                    
+            except Exception as e:
+                print(f"分析Python代码时出错: {e}")
+        else:
+            print("\n未找到Python代码片段，跳过调用图分析")
         
     except Exception as e:
         print(f"错误: {e}")
