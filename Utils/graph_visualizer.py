@@ -336,3 +336,228 @@ def generate_call_graph_visualization(call_graph, filename_prefix, title, verbos
         if verbose:
             print("未发现函数调用关系")
         return None
+
+
+def generate_merged_call_graph_visualization(
+    call_graph: Dict[str, List[str]],
+    node_types: Dict[str, str],
+    c_to_python_calls: List[tuple],
+    python_to_c_calls: List[tuple],
+    filename_prefix: str = "merged_call_graph",
+    title: str = "Merged Python-C Call Graph",
+    verbose: bool = False
+):
+    """
+    生成带颜色的合并调用图可视化
+    
+    Args:
+        call_graph: 调用图字典
+        node_types: 节点类型字典 {node: type}
+        c_to_python_calls: C->Python调用列表
+        python_to_c_calls: Python->C调用列表
+        filename_prefix: 文件名前缀
+        title: 图标题
+        verbose: 是否显示详细信息
+    """
+    if verbose:
+        print("生成带颜色的合并调用图...")
+    
+    # 创建输出目录
+    output_dir = "output"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 生成DOT格式文件
+    dot_content = _generate_colored_dot_graph(
+        call_graph, 
+        node_types, 
+        c_to_python_calls, 
+        python_to_c_calls, 
+        title
+    )
+    
+    # 保存DOT文件
+    dot_path = os.path.join(output_dir, f"{filename_prefix}.dot")
+    with open(dot_path, 'w', encoding='utf-8') as f:
+        f.write(dot_content)
+    
+    results = {'dot': dot_path}
+    
+    # 生成PDF（如果graphviz可用）
+    if GRAPHVIZ_AVAILABLE:
+        try:
+            src = graphviz.Source(dot_content)
+            pdf_path = os.path.join(output_dir, filename_prefix)
+            src.render(pdf_path, format='pdf', cleanup=True)
+            results['pdf'] = f"{pdf_path}.pdf"
+        except Exception as e:
+            if verbose:
+                print(f"生成PDF失败: {e}")
+    
+    # 生成Mermaid格式
+    mermaid_content = _generate_colored_mermaid_graph(
+        call_graph, 
+        node_types, 
+        c_to_python_calls, 
+        python_to_c_calls
+    )
+    mmd_path = os.path.join(output_dir, f"{filename_prefix}.mmd")
+    with open(mmd_path, 'w', encoding='utf-8') as f:
+        f.write(mermaid_content)
+    results['mermaid'] = mmd_path
+    
+    # 生成文本格式
+    visualizer = CallGraphVisualizer()
+    text_content = visualizer.generate_simple_text_graph(call_graph)
+    text_path = os.path.join(output_dir, f"{filename_prefix}.txt")
+    with open(text_path, 'w', encoding='utf-8') as f:
+        f.write(text_content)
+    results['text'] = text_path
+    
+    # 打印到控制台
+    visualizer.print_call_graph(call_graph)
+    
+    if verbose:
+        print(f"调用图文件已生成:")
+        for format_type, file_path in results.items():
+            print(f"  {format_type.upper()}: {file_path}")
+    
+    return results
+
+
+def _generate_colored_dot_graph(
+    call_graph: Dict[str, List[str]],
+    node_types: Dict[str, str],
+    c_to_python_calls: List[tuple],
+    python_to_c_calls: List[tuple],
+    title: str
+) -> str:
+    """生成带颜色的DOT格式调用图"""
+    dot_lines = []
+    dot_lines.append("digraph CallGraph {")
+    dot_lines.append(f'    label="{title}";')
+    dot_lines.append("    rankdir=TB;")
+    dot_lines.append("    node [shape=box, style=filled];")
+    dot_lines.append("")
+    
+    # 定义颜色
+    colors = {
+        'c_function': 'lightblue',
+        'registered_c_function': 'lightgreen',
+        'python_function': 'lightyellow'
+    }
+    
+    # 添加所有节点（带颜色）
+    all_functions = set(call_graph.keys())
+    for callees in call_graph.values():
+        all_functions.update(callees)
+    
+    for func in sorted(all_functions):
+        node_type = node_types.get(func, 'python_function')
+        color = colors.get(node_type, 'white')
+        dot_lines.append(f'    "{func}" [fillcolor={color}];')
+    
+    dot_lines.append("")
+    
+    # 创建跨语言调用集合（用于着色）
+    c_to_py_set = set(c_to_python_calls)
+    py_to_c_set = set(python_to_c_calls)
+    
+    # 添加边（带颜色）
+    for caller, callees in call_graph.items():
+        for callee in callees:
+            edge = (caller, callee)
+            
+            # 确定边的颜色
+            if edge in c_to_py_set:
+                # C->Python调用：蓝色粗线
+                dot_lines.append(f'    "{caller}" -> "{callee}" [color=blue, penwidth=2.0];')
+            elif edge in py_to_c_set:
+                # Python->C调用：红色粗线
+                dot_lines.append(f'    "{caller}" -> "{callee}" [color=red, penwidth=2.0];')
+            else:
+                # 同语言调用：默认黑色
+                dot_lines.append(f'    "{caller}" -> "{callee}";')
+    
+    # 添加图例
+    dot_lines.append("")
+    dot_lines.append("    // Legend")
+    dot_lines.append('    subgraph cluster_legend {')
+    dot_lines.append('        label="Legend";')
+    dot_lines.append('        style=filled;')
+    dot_lines.append('        fillcolor=white;')
+    dot_lines.append('        "C Function" [fillcolor=lightblue];')
+    dot_lines.append('        "Registered C\\n(Python name)" [fillcolor=lightgreen];')
+    dot_lines.append('        "Python Function" [fillcolor=lightyellow];')
+    dot_lines.append('        "C Function" -> "Registered C\\n(Python name)" [style=invis];')
+    dot_lines.append('        "Registered C\\n(Python name)" -> "Python Function" [style=invis];')
+    dot_lines.append('    }')
+    
+    dot_lines.append("}")
+    
+    return "\n".join(dot_lines)
+
+
+def _generate_colored_mermaid_graph(
+    call_graph: Dict[str, List[str]],
+    node_types: Dict[str, str],
+    c_to_python_calls: List[tuple],
+    python_to_c_calls: List[tuple]
+) -> str:
+    """生成带颜色的Mermaid格式调用图"""
+    mermaid_lines = []
+    mermaid_lines.append("graph TB")
+    
+    # 添加节点样式定义
+    mermaid_lines.append("    classDef cFunc fill:#add8e6;")  # lightblue
+    mermaid_lines.append("    classDef regCFunc fill:#90ee90;")  # lightgreen
+    mermaid_lines.append("    classDef pyFunc fill:#ffffe0;")  # lightyellow
+    mermaid_lines.append("")
+    
+    # 为节点创建ID映射（移除特殊字符）
+    node_ids = {}
+    counter = 0
+    for func in call_graph.keys():
+        node_ids[func] = f"node{counter}"
+        counter += 1
+    
+    # 添加节点定义
+    for func, node_id in node_ids.items():
+        # 转义特殊字符
+        label = func.replace('"', '\\"')
+        node_type = node_types.get(func, 'python_function')
+        
+        # 确定样式类
+        if node_type == 'c_function':
+            style_class = "cFunc"
+        elif node_type == 'registered_c_function':
+            style_class = "regCFunc"
+        else:
+            style_class = "pyFunc"
+        
+        mermaid_lines.append(f'    {node_id}["{label}"]:::{style_class}')
+    
+    mermaid_lines.append("")
+    
+    # 创建跨语言调用集合
+    c_to_py_set = set(c_to_python_calls)
+    py_to_c_set = set(python_to_c_calls)
+    
+    # 添加边
+    for caller, callees in call_graph.items():
+        caller_id = node_ids.get(caller, caller)
+        for callee in callees:
+            callee_id = node_ids.get(callee, callee)
+            edge = (caller, callee)
+            
+            # 确定边的样式
+            if edge in c_to_py_set:
+                # C->Python: 蓝色粗线
+                mermaid_lines.append(f'    {caller_id} ==>|C-&gt;Py| {callee_id}')
+            elif edge in py_to_c_set:
+                # Python->C: 红色粗线
+                mermaid_lines.append(f'    {caller_id} ==>|Py-&gt;C| {callee_id}')
+            else:
+                # 同语言调用
+                mermaid_lines.append(f'    {caller_id} --> {callee_id}')
+    
+    return "\n".join(mermaid_lines)

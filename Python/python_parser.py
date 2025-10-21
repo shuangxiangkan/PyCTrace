@@ -14,7 +14,12 @@ class PythonCodeParser:
     
     def __init__(self):
         # 初始化tree-sitter解析器
-        self.python_language = tree_sitter.Language(tspy.language(), "python")
+        try:
+            # 新版API
+            self.python_language = tree_sitter.Language(tspy.language())
+        except TypeError:
+            # 旧版API
+            self.python_language = tree_sitter.Language(tspy.language(), "python")
     
     def parse_file(self, file_path: str) -> Dict[str, Any]:
         """
@@ -87,7 +92,14 @@ class PythonCodeParser:
         
         # 创建解析器
         parser = tree_sitter.Parser()
-        parser.set_language(self.python_language)
+        
+        # 兼容新旧API
+        try:
+            # 新版API
+            parser.language = self.python_language
+        except AttributeError:
+            # 旧版API
+            parser.set_language(self.python_language)
         
         # 解析代码
         tree = parser.parse(bytes(code_string, 'utf8'))

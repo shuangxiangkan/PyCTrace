@@ -16,6 +16,8 @@ def main():
     parser = argparse.ArgumentParser(description="PyCTrace - Python和C代码分析工具")
     parser.add_argument("directory", help="要分析的目录路径")
     parser.add_argument("-v", "--verbose", action="store_true", help="显示详细信息")
+    parser.add_argument("--merge", action="store_true", help="生成合并的Python-C调用图")
+    parser.add_argument("--python-only", action="store_true", help="只生成Python相关的C调用图（不包含所有C函数）")
     
     args = parser.parse_args()
     
@@ -40,7 +42,11 @@ def main():
         
         # 首先分析C文件并生成调用图
         if c_files:
-            print("\n正在分析C文件并生成调用图...")
+            # 根据选项决定生成哪种调用图
+            if args.python_only:
+                print("\n正在分析C文件并生成Python相关调用图...")
+            else:
+                print("\n正在分析C文件并生成调用图...")
             print("=" * 50)
             
             try:
@@ -53,17 +59,31 @@ def main():
                         print(f"\n分析文件: {c_file}")
                         print("-" * 30)
                         
-                        # 解析C文件
-                        parse_result = c_parser.parse_file(c_file)
-                        
-                        if args.verbose:
-                            print(f"发现的函数: {parse_result['functions']}")
-                            print(f"函数调用关系: {parse_result['calls']}")
-                        
-                        # 生成调用图可视化
-                        file_basename = os.path.splitext(os.path.basename(c_file))[0]
-                        filename_prefix = f"c_call_graph_{file_basename}"
-                        title = f"C Call Graph - {os.path.basename(c_file)}"
+                        if args.python_only:
+                            # 生成只包含Python相关函数的调用图
+                            parse_result = c_parser.build_python_related_call_graph(c_file)
+                            
+                            if args.verbose:
+                                print(f"Python相关的C函数: {parse_result['python_related_functions']}")
+                                print(f"注册的C函数: {parse_result['registered_c_functions']}")
+                                print(f"Python调用: {[call.get('python_call') for call in parse_result['python_calls']]}")
+                            
+                            # 生成调用图可视化
+                            file_basename = os.path.splitext(os.path.basename(c_file))[0]
+                            filename_prefix = f"python_related_call_graph_{file_basename}"
+                            title = f"Python-Related Call Graph - {os.path.basename(c_file)}"
+                        else:
+                            # 解析C文件（完整调用图）
+                            parse_result = c_parser.parse_file(c_file)
+                            
+                            if args.verbose:
+                                print(f"发现的函数: {parse_result['functions']}")
+                                print(f"函数调用关系: {parse_result['calls']}")
+                            
+                            # 生成调用图可视化
+                            file_basename = os.path.splitext(os.path.basename(c_file))[0]
+                            filename_prefix = f"c_call_graph_{file_basename}"
+                            title = f"C Call Graph - {os.path.basename(c_file)}"
                         
                         generate_call_graph_visualization(
                             parse_result['call_graph'],
@@ -343,6 +363,50 @@ def main():
                     print(f"分析Python代码时出错: {e}")
             else:
                 print("\n未找到Python代码片段，跳过调用图分析")
+        
+        # 如果指定了 --merge 选项，生成合并的 Python-C 调用图
+        if args.merge and c_files:
+            print("\n\n正在生成合并的Python-C调用图...")
+            print("=" * 70)
+            
+            from CallGraph.merger import extract_and_merge_from_c_file
+            
+            for c_file in c_files:
+                try:
+                    print(f"\n处理文件: {c_file}")
+                    print("-" * 70)
+                    
+                    # 生成合并的调用图
+                    merged_result = extract_and_merge_from_c_file(
+                        c_file,
+                        output_prefix="merged_call_graph",
+                        verbose=args.verbose
+                    )
+                    
+                    # 显示统计信息
+                    print(f"\n📊 合并后的调用图统计:")
+                    print(f"  总函数数: {len(merged_result['all_functions'])}")
+                    print(f"  C函数数: {len(merged_result['c_functions'])}")
+                    print(f"  Python函数数: {len(merged_result['python_functions'])}")
+                    print(f"  C->Python调用: {len(merged_result['c_to_python_calls'])}")
+                    print(f"  Python->C调用: {len(merged_result['python_to_c_calls'])}")
+                    
+                    if args.verbose:
+                        if merged_result['c_to_python_calls']:
+                            print("\n  C->Python调用详情:")
+                            for caller, callee in merged_result['c_to_python_calls']:
+                                print(f"    {caller} -> {callee}")
+                        
+                        if merged_result['python_to_c_calls']:
+                            print("\n  Python->C调用详情:")
+                            for caller, callee in merged_result['python_to_c_calls']:
+                                print(f"    {caller} -> {callee}")
+                    
+                except Exception as e:
+                    print(f"生成合并调用图时出错: {e}")
+                    if args.verbose:
+                        import traceback
+                        traceback.print_exc()
         
     except Exception as e:
         print(f"错误: {e}")

@@ -24,8 +24,14 @@ class CCodeParser:
     
     def __init__(self):
         # 初始化tree-sitter解析器
-        self.c_language = tree_sitter.Language(tsc.language(), "c")
-        self.cpp_language = tree_sitter.Language(tscpp.language(), "cpp")
+        try:
+            # 新版API（不需要name参数）
+            self.c_language = tree_sitter.Language(tsc.language())
+            self.cpp_language = tree_sitter.Language(tscpp.language())
+        except TypeError:
+            # 旧版API（需要name参数）
+            self.c_language = tree_sitter.Language(tsc.language(), "c")
+            self.cpp_language = tree_sitter.Language(tscpp.language(), "cpp")
     
     def _parse_source_code(self, file_path: str) -> Tuple[tree_sitter.Tree, str]:
         """
@@ -47,10 +53,19 @@ class CCodeParser:
         # 根据文件扩展名选择解析器
         file_ext = os.path.splitext(file_path)[1].lower()
         parser = tree_sitter.Parser()
+        
+        # 兼容新旧API
         if file_ext in ['.cpp', '.cc', '.cxx', '.hpp']:
-            parser.set_language(self.cpp_language)
+            language = self.cpp_language
         else:
-            parser.set_language(self.c_language)
+            language = self.c_language
+        
+        try:
+            # 新版API
+            parser.language = language
+        except AttributeError:
+            # 旧版API
+            parser.set_language(language)
         
         # 解析代码
         tree = parser.parse(bytes(source_code, 'utf8'))
@@ -271,6 +286,173 @@ class CCodeParser:
         
         traverse(node)
         return strings
+    
+    def build_python_related_call_graph(self, file_path: str) -> Dict[str, Any]:
+        """
+        构建Python相关的调用图
+        只包含与Python交互相关的C函数和Python函数调用
+        
+        Args:
+            file_path: C/C++文件路径
+            
+        Returns:
+            Dict: 包含以下信息：
+                - python_related_functions: 与Python相关的C函数列表
+                - registered_c_functions: 注册到Python的C函数映射 {c_function: python_name}
+                - python_calls: Python函数调用信息列表
+                - call_graph: 调用图 {caller: [callees]}
+                - visualization_data: 用于可视化的数据
+        """
+        # 解析源代码
+        tree, source_code = self._parse_source_code(file_path)
+        
+        # 1. 获取注册到Python的C函数信息（使用PythonRegistrationExtractor）
+        registration_info = self.extract_python_function_registrations(file_path)
+        registered_c_functions = {}  # {c_function: python_name}
+        
+        for method_array in registration_info['structured_info']['method_definitions']:
+            for method in method_array['methods']:
+                c_func = method['c_function']
+                py_name = method['python_name']
+                registered_c_functions[c_func] = py_name
+        
+        # 2. 获取Python函数调用信息（使用PythonCallExtractor）
+        call_info = self.extract_python_calls(file_path)
+        python_calls = call_info['parsed_calls']
+        calling_c_functions = set(call_info['functions_with_calls'])  # 直接使用提取器的结果
+        
+        # 3. 合并所有Python相关的C函数
+        python_related_functions = set(registered_c_functions.keys()) | calling_c_functions
+        
+        # 4. 构建调用图（只包含Python相关的函数和调用）
+        call_graph = {}
+        
+        # 初始化调用图节点
+        for func in python_related_functions:
+            call_graph[func] = []
+        
+        # 添加Python函数作为节点
+        python_function_nodes = set()
+        for call in python_calls:
+            if call.get('function_name'):
+                python_function_nodes.add(call['function_name'])
+        
+        # 提取C函数之间的调用关系（只保留Python相关的）
+        all_calls = self._extract_function_calls(tree.root_node, source_code)
+        for caller, callee in all_calls:
+            if caller in python_related_functions:
+                if callee in python_related_functions:
+                    # C函数调用C函数
+                    if callee not in call_graph[caller]:
+                        call_graph[caller].append(callee)
+        
+        # 添加C函数调用Python函数的关系（使用PythonCallExtractor来查找调用者）
+        call_extractor = PythonCallExtractor()
+        for call in python_calls:
+            # 使用PythonCallExtractor的方法找到调用者
+            c_caller = call_extractor.find_caller_for_python_call(tree.root_node, source_code, call['raw_code'])
+            if c_caller and c_caller in python_related_functions:
+                if c_caller not in call_graph:
+                    call_graph[c_caller] = []
+                
+                # 添加Python函数调用
+                python_call_repr = call.get('python_call', call.get('function_name', 'Unknown'))
+                if python_call_repr and python_call_repr not in call_graph[c_caller]:
+                    call_graph[c_caller].append(python_call_repr)
+        
+        # 5. 构建可视化数据
+        visualization_data = self._build_visualization_data(
+            python_related_functions,
+            registered_c_functions,
+            python_calls,
+            call_graph
+        )
+        
+        return {
+            'file_path': file_path,
+            'python_related_functions': list(python_related_functions),
+            'registered_c_functions': registered_c_functions,
+            'python_calls': python_calls,
+            'call_graph': call_graph,
+            'visualization_data': visualization_data
+        }
+    
+    def _build_visualization_data(self, python_related_functions, registered_c_functions, 
+                                   python_calls, call_graph) -> Dict[str, Any]:
+        """构建用于可视化的数据结构"""
+        nodes = []
+        edges = []
+        
+        # 添加C函数节点
+        for func in python_related_functions:
+            node_type = 'registered_c_function' if func in registered_c_functions else 'c_function'
+            python_name = registered_c_functions.get(func, None)
+            
+            node = {
+                'id': func,
+                'label': func,
+                'type': node_type,
+                'python_name': python_name
+            }
+            nodes.append(node)
+        
+        # 添加Python函数节点
+        python_funcs = set()
+        for call in python_calls:
+            if call.get('function_name'):
+                python_funcs.add(call['function_name'])
+        
+        for py_func in python_funcs:
+            node = {
+                'id': py_func,
+                'label': py_func,
+                'type': 'python_function'
+            }
+            nodes.append(node)
+        
+        # 添加边（调用关系）
+        for caller, callees in call_graph.items():
+            for callee in callees:
+                edge = {
+                    'from': caller,
+                    'to': callee,
+                    'type': 'python_call' if callee in python_funcs or '(' in callee else 'c_call'
+                }
+                edges.append(edge)
+        
+        return {
+            'nodes': nodes,
+            'edges': edges
+        }
+    
+    def generate_python_related_call_graph_file(self, file_path: str, output_prefix: str = "python_related_call_graph") -> Dict[str, Any]:
+        """
+        生成Python相关调用图并保存为文件
+        
+        Args:
+            file_path: C/C++文件路径
+            output_prefix: 输出文件前缀
+            
+        Returns:
+            Dict: 调用图数据
+        """
+        result = self.build_python_related_call_graph(file_path)
+        
+        # 生成调用图可视化
+        from Utils.graph_visualizer import generate_call_graph_visualization
+        
+        file_basename = os.path.splitext(os.path.basename(file_path))[0]
+        filename_prefix = f"{output_prefix}_{file_basename}"
+        title = f"Python-Related Call Graph - {os.path.basename(file_path)}"
+        
+        generate_call_graph_visualization(
+            result['call_graph'],
+            filename_prefix=filename_prefix,
+            title=title,
+            verbose=True
+        )
+        
+        return result
     
 def parse_c_file(file_path: str) -> List[str]:
     """

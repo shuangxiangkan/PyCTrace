@@ -28,9 +28,13 @@ class PythonCallExtractor:
         # 解析Python函数调用信息
         parsed_calls = self._parse_python_calls(raw_snippets, source_code)
         
+        # 查找包含Python调用的C函数
+        functions_with_calls = self._find_functions_with_python_calls(tree_root_node, source_code)
+        
         return {
             'raw_code_snippets': raw_snippets,
-            'parsed_calls': parsed_calls
+            'parsed_calls': parsed_calls,
+            'functions_with_calls': functions_with_calls
         }
     
     def _extract_raw_code_snippets(self, node, source_code):
@@ -176,3 +180,111 @@ class PythonCallExtractor:
             'PyList_New', 'PyList_SetItem'
         ]
         return any(api in call_text for api in arg_building_apis)
+    
+    def _find_functions_with_python_calls(self, node, source_code):
+        """
+        查找包含Python函数调用的C函数
+        
+        Args:
+            node: AST根节点
+            source_code: 源代码字符串
+            
+        Returns:
+            list: 包含Python调用的C函数名列表
+        """
+        functions_with_calls = []
+        
+        def traverse(current_node):
+            if current_node.type == 'function_definition':
+                func_name = self._get_function_name(current_node, source_code)
+                if func_name:
+                    # 检查函数体中是否有Python调用
+                    if self._has_python_call_in_node(current_node, source_code):
+                        functions_with_calls.append(func_name)
+            
+            for child in current_node.children:
+                traverse(child)
+        
+        traverse(node)
+        return functions_with_calls
+    
+    def _get_function_name(self, node, source_code):
+        """从函数定义节点中提取函数名"""
+        try:
+            # 递归查找function_declarator或pointer_declarator中的identifier
+            def find_function_name(current_node):
+                if current_node.type == 'identifier':
+                    return self._get_node_text(current_node, source_code)
+                
+                # 在function_declarator中查找
+                if current_node.type == 'function_declarator':
+                    for child in current_node.children:
+                        if child.type == 'identifier':
+                            return self._get_node_text(child, source_code)
+                
+                # 在pointer_declarator中查找（用于返回指针的函数）
+                if current_node.type == 'pointer_declarator':
+                    for child in current_node.children:
+                        result = find_function_name(child)
+                        if result:
+                            return result
+                
+                # 递归查找子节点
+                for child in current_node.children:
+                    result = find_function_name(child)
+                    if result:
+                        return result
+                
+                return None
+            
+            return find_function_name(node)
+        except Exception:
+            return None
+    
+    def _has_python_call_in_node(self, node, source_code):
+        """检查节点中是否包含Python函数调用"""
+        def traverse(current_node):
+            if current_node.type == 'call_expression':
+                call_text = self._get_node_text(current_node, source_code)
+                # 使用已有的判断方法
+                if self._is_python_function_call(call_text):
+                    return True
+            
+            for child in current_node.children:
+                if traverse(child):
+                    return True
+            return False
+        
+        return traverse(node)
+    
+    def find_caller_for_python_call(self, node, source_code, call_code):
+        """
+        找到包含特定Python调用代码的C函数
+        
+        Args:
+            node: AST根节点
+            source_code: 源代码字符串
+            call_code: Python调用代码片段
+            
+        Returns:
+            str: 包含该调用的C函数名，如果未找到则返回None
+        """
+        found_function = None
+        
+        def traverse(current_node):
+            nonlocal found_function
+            
+            if current_node.type == 'function_definition':
+                func_name = self._get_function_name(current_node, source_code)
+                if func_name:
+                    # 检查函数体中是否包含这段代码
+                    func_text = self._get_node_text(current_node, source_code)
+                    if call_code in func_text:
+                        found_function = func_name
+                        return
+            
+            for child in current_node.children:
+                traverse(child)
+        
+        traverse(node)
+        return found_function
