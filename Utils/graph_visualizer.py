@@ -3,7 +3,7 @@
 用于生成和可视化Python调用图
 """
 
-from typing import Dict, List, Any
+from typing import Dict, List
 import os
 import subprocess
 try:
@@ -303,3 +303,36 @@ def visualize_call_graph(call_graph: Dict[str, List[str]],
     visualizer.print_call_graph(call_graph)
     
     return results
+
+
+def generate_call_graph_visualization(call_graph, filename_prefix, title, verbose=False):
+    """
+    统一的调用图生成函数
+    
+    Args:
+        call_graph: 调用图字典
+        filename_prefix: 文件名前缀
+        title: 图标题
+        verbose: 是否显示详细信息
+    """
+    if call_graph and any(call_graph.values()):
+        if verbose:
+            print("生成调用图可视化文件...")
+        
+        output_files = visualize_call_graph(
+            call_graph,
+            output_dir="output",
+            filename_prefix=filename_prefix,
+            title=title
+        )
+        
+        if verbose:
+            print(f"调用图文件已生成:")
+            for format_type, file_path in output_files.items():
+                print(f"  {format_type.upper()}: {file_path}")
+        
+        return output_files
+    else:
+        if verbose:
+            print("未发现函数调用关系")
+        return None

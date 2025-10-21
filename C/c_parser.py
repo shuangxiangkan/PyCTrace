@@ -56,22 +56,26 @@ class CCodeParser:
     
     def parse_file(self, file_path: str) -> Dict[str, Any]:
         """
-        解析C/C++文件，提取函数名
+        解析C/C++文件，提取函数名和调用关系
         
         Args:
             file_path: C/C++文件路径
             
         Returns:
-            Dict: 解析结果，包含函数名列表
+            Dict: 解析结果，包含函数名列表、调用关系和调用图
         """
         tree, source_code = self._parse_source_code(file_path)
         
-        # 提取函数名
+        # 提取函数名和调用关系
         functions = self._extract_functions(tree.root_node, source_code)
+        calls = self._extract_function_calls(tree.root_node, source_code)
+        call_graph = self._build_call_graph(functions, calls)
         
         return {
             'file_path': file_path,
-            'functions': functions
+            'functions': functions,
+            'calls': calls,
+            'call_graph': call_graph
         }
     
     def _extract_functions(self, node: tree_sitter.Node, source_code: str) -> List[str]:
@@ -127,6 +131,74 @@ class CCodeParser:
         """获取节点对应的源代码文本"""
         return source_code[node.start_byte:node.end_byte]
     
+    def _extract_function_calls(self, node: tree_sitter.Node, source_code: str) -> List[Tuple[str, str]]:
+        """提取函数调用关系"""
+        calls = []
+        current_function = None
+        
+        def traverse(node, parent_function=None):
+            nonlocal current_function
+            
+            # 如果进入函数定义，更新当前函数
+            if node.type == 'function_definition':
+                func_name = self._get_function_name(node, source_code)
+                if func_name:
+                    current_function = func_name
+                    # 递归处理函数体
+                    for child in node.children:
+                        traverse(child, current_function)
+                    current_function = parent_function  # 恢复上级函数
+                return
+            
+            # 如果是函数调用
+            if node.type == 'call_expression':
+                called_function = self._get_called_function_name(node, source_code)
+                if called_function and current_function:
+                    calls.append((current_function, called_function))
+            
+            # 递归处理子节点
+            for child in node.children:
+                traverse(child, current_function)
+        
+        traverse(node)
+        return calls
+    
+    def _get_called_function_name(self, call_node: tree_sitter.Node, source_code: str) -> Optional[str]:
+        """从函数调用节点中提取被调用的函数名"""
+        try:
+            # 查找函数名（可能是简单的identifier或field_expression）
+            for child in call_node.children:
+                if child.type == 'identifier':
+                    return self._get_node_text(child, source_code)
+                elif child.type == 'field_expression':
+                    # 处理 obj.method() 或 struct->field() 形式的调用
+                    return self._get_field_name(child, source_code)
+            return None
+        except Exception:
+            return None
+    
+    def _get_field_name(self, field_node: tree_sitter.Node, source_code: str) -> Optional[str]:
+        """获取字段表达式的名称"""
+        try:
+            # 查找最后一个identifier（方法名或字段名）
+            for child in reversed(field_node.children):
+                if child.type == 'field_identifier':
+                    return self._get_node_text(child, source_code)
+            return None
+        except Exception:
+            return None
+    
+    def _build_call_graph(self, functions: List[str], calls: List[Tuple[str, str]]) -> Dict[str, List[str]]:
+        """构建调用图"""
+        call_graph = {func: [] for func in functions}
+        
+        for caller, callee in calls:
+            if caller in call_graph:
+                if callee not in call_graph[caller]:
+                    call_graph[caller].append(callee)
+        
+        return call_graph
+
     def extract_strings(self, file_path: str) -> List[str]:
         """
         从C/C++文件中提取Python代码片段
