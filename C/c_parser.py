@@ -15,6 +15,8 @@ from Utils.python_string import (
     clean_string_literal, 
     extract_python_from_strings
 )
+from .python_registration_extractor import PythonRegistrationExtractor
+from .python_call_extractor import PythonCallExtractor
 
 
 class CCodeParser:
@@ -22,8 +24,8 @@ class CCodeParser:
     
     def __init__(self):
         # 初始化tree-sitter解析器
-        self.c_language = tree_sitter.Language(tsc.language())
-        self.cpp_language = tree_sitter.Language(tscpp.language())
+        self.c_language = tree_sitter.Language(tsc.language(), "c")
+        self.cpp_language = tree_sitter.Language(tscpp.language(), "cpp")
     
     def _parse_source_code(self, file_path: str) -> Tuple[tree_sitter.Tree, str]:
         """
@@ -44,10 +46,11 @@ class CCodeParser:
         
         # 根据文件扩展名选择解析器
         file_ext = os.path.splitext(file_path)[1].lower()
+        parser = tree_sitter.Parser()
         if file_ext in ['.cpp', '.cc', '.cxx', '.hpp']:
-            parser = tree_sitter.Parser(self.cpp_language)
+            parser.set_language(self.cpp_language)
         else:
-            parser = tree_sitter.Parser(self.c_language)
+            parser.set_language(self.c_language)
         
         # 解析代码
         tree = parser.parse(bytes(source_code, 'utf8'))
@@ -216,6 +219,40 @@ class CCodeParser:
         
         # 使用Utils中的字符串处理功能
         return extract_python_from_strings(raw_strings)
+    
+    def extract_python_function_registrations(self, file_path: str) -> Dict[str, Any]:
+        """
+        提取C代码中注册的Python函数信息
+        
+        Args:
+            file_path: C/C++文件路径
+            
+        Returns:
+            Dict: 包含模块信息和注册的Python函数信息
+        """
+        # 解析源代码
+        tree, source_code = self._parse_source_code(file_path)
+        
+        # 委托给专门的提取器
+        extractor = PythonRegistrationExtractor()
+        return extractor.extract_python_function_registrations_from_ast(tree.root_node, source_code, file_path)
+    
+    def extract_python_calls(self, file_path: str) -> Dict[str, Any]:
+        """
+        提取C代码中调用Python函数的信息
+        
+        Args:
+            file_path: C/C++文件路径
+            
+        Returns:
+            Dict: 包含原始代码片段和解析后的调用信息
+        """
+        # 解析源代码
+        tree, source_code = self._parse_source_code(file_path)
+        
+        # 委托给专门的提取器
+        extractor = PythonCallExtractor()
+        return extractor.extract_python_calls_from_ast(tree.root_node, source_code)
     
     def _extract_strings(self, node: tree_sitter.Node, source_code: str) -> List[str]:
         """提取字符串字面量"""

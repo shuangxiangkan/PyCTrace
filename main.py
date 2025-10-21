@@ -77,6 +77,174 @@ def main():
                         
             except Exception as e:
                 print(f"分析C文件时出错: {e}")
+            
+            # 提取Python函数注册信息
+            print("\n正在提取Python函数注册信息...")
+            print("=" * 50)
+            
+            try:
+                for c_file in c_files:
+                    try:
+                        print(f"\n分析文件: {c_file}")
+                        print("-" * 30)
+                        
+                        # 提取Python函数注册信息
+                        registration_info = c_parser.extract_python_function_registrations(c_file)
+                        
+                        # 获取结构化信息
+                        structured_info = registration_info['structured_info']
+                        raw_code_snippets = registration_info['raw_code_snippets']
+                        
+                        # 显示原始代码片段统计
+                        if args.verbose:
+                            print("📄 原始代码片段统计:")
+                            print(f"  • PyMethodDef数组: {len(raw_code_snippets['pymethoddef_arrays'])} 个")
+                            print(f"  • PyModuleDef结构体: {len(raw_code_snippets['pymoduledef_structs'])} 个")
+                            print(f"  • PyInit函数: {len(raw_code_snippets['pyinit_functions'])} 个")
+                            print(f"  • 相关函数: {len(raw_code_snippets['related_functions'])} 个")
+                        
+                        # 显示模块定义信息
+                        if structured_info['module_definitions']:
+                            print("📦 模块定义:")
+                            for module_def in structured_info['module_definitions']:
+                                print(f"  • 结构体名称: {module_def['struct_name']}")
+                                print(f"  • 模块名称: {module_def['module_name']}")
+                                print(f"  • 方法数组: {module_def['methods_array']}")
+                        
+                        # 显示初始化函数信息
+                        if structured_info['init_functions']:
+                            print("🔧 初始化函数:")
+                            for init_func in structured_info['init_functions']:
+                                print(f"  • 函数名: {init_func['function_name']}")
+                                print(f"  • 模块名: {init_func['module_name']}")
+                                print(f"  • 模块结构体: {init_func['module_struct']}")
+                        
+                        # 显示方法定义信息
+                        if structured_info['method_definitions']:
+                            print("🐍 注册的Python函数:")
+                            for method_array in structured_info['method_definitions']:
+                                print(f"  数组名称: {method_array['array_name']}")
+                                for method in method_array['methods']:
+                                    print(f"    • Python函数名: '{method['python_name']}'")
+                                    print(f"      C函数名: {method['c_function']}")
+                                    print(f"      标志: {method['flags']}")
+                                    if method['doc']:
+                                        print(f"      文档: '{method['doc']}'")
+                        
+                        # 在verbose模式下显示原始代码片段
+                        if args.verbose and any(raw_code_snippets.values()):
+                            print("\n📝 原始代码片段:")
+                            
+                            if raw_code_snippets['pymethoddef_arrays']:
+                                print("\n  PyMethodDef数组:")
+                                for i, snippet in enumerate(raw_code_snippets['pymethoddef_arrays'], 1):
+                                    print(f"    片段 {i}:")
+                                    print("    " + "\n    ".join(snippet.split('\n')))
+                            
+                            if raw_code_snippets['pymoduledef_structs']:
+                                print("\n  PyModuleDef结构体:")
+                                for i, snippet in enumerate(raw_code_snippets['pymoduledef_structs'], 1):
+                                    print(f"    片段 {i}:")
+                                    print("    " + "\n    ".join(snippet.split('\n')))
+                            
+                            if raw_code_snippets['pyinit_functions']:
+                                print("\n  PyInit函数:")
+                                for i, snippet in enumerate(raw_code_snippets['pyinit_functions'], 1):
+                                    print(f"    片段 {i}:")
+                                    print("    " + "\n    ".join(snippet.split('\n')))
+                            
+                            if raw_code_snippets['related_functions']:
+                                print("\n  相关函数:")
+                                for i, snippet in enumerate(raw_code_snippets['related_functions'], 1):
+                                    print(f"    片段 {i}:")
+                                    print("    " + "\n    ".join(snippet.split('\n')))
+                                    print()
+                        
+                        # 检查是否有注册信息
+                        has_registration = (structured_info['module_definitions'] or 
+                                          structured_info['init_functions'] or 
+                                          structured_info['method_definitions'])
+                        
+                        if not has_registration:
+                            print("  未找到Python函数注册信息")
+                            
+                    except Exception as e:
+                        print(f"提取Python函数注册信息时出错: {e}")
+                        
+            except Exception as e:
+                print(f"分析Python函数注册信息时出错: {e}")
+            
+            # 提取C代码中的Python函数调用
+            print("\n正在提取C代码中的Python函数调用...")
+            print("=" * 50)
+            
+            try:
+                # 创建C代码解析器
+                c_parser = CCodeParser()
+                
+                for c_file in c_files:
+                    try:
+                        print(f"\n分析文件: {c_file}")
+                        print("-" * 30)
+                        
+                        # 提取Python调用信息
+                        call_info = c_parser.extract_python_calls(c_file)
+                        
+                        # 获取原始代码片段和解析后的调用信息
+                        raw_snippets = call_info['raw_code_snippets']
+                        parsed_calls = call_info['parsed_calls']
+                        
+                        # 显示原始代码片段统计
+                        if args.verbose:
+                            print("📄 Python函数调用相关代码统计:")
+                            print(f"  • 函数调用: {len(raw_snippets['function_calls'])} 个")
+                            print(f"  • 函数查找: {len(raw_snippets['function_lookup'])} 个")
+                            print(f"  • 参数构建: {len(raw_snippets['argument_building'])} 个")
+                        
+                        # 显示解析后的调用信息
+                        if parsed_calls:
+                            print("🐍 解析的Python函数调用:")
+                            for call in parsed_calls:
+                                if call['python_call']:
+                                    print(f"  • Python调用: {call['python_call']}")
+                                    print(f"    调用类型: {call['call_type']}")
+                                    print(f"    原始代码: {call['raw_code']}")
+                                else:
+                                    print(f"  • 调用类型: {call['call_type']}")
+                                    print(f"    原始代码: {call['raw_code']}")
+                        
+                        # 在verbose模式下显示原始代码片段
+                        if args.verbose and any(raw_snippets.values()):
+                            print("\n📝 原始Python函数调用相关代码:")
+                            
+                            if raw_snippets['function_calls']:
+                                print("\n  函数调用:")
+                                for i, snippet in enumerate(raw_snippets['function_calls'], 1):
+                                    print(f"    片段 {i}: {snippet}")
+                            
+                            if raw_snippets['function_lookup']:
+                                print("\n  函数查找:")
+                                for i, snippet in enumerate(raw_snippets['function_lookup'], 1):
+                                    print(f"    片段 {i}: {snippet}")
+                            
+                            if raw_snippets['argument_building']:
+                                print("\n  参数构建:")
+                                for i, snippet in enumerate(raw_snippets['argument_building'], 1):
+                                    print(f"    片段 {i}: {snippet}")
+                        
+                        # 检查是否有Python调用
+                        has_calls = (raw_snippets['function_calls'] or 
+                                   raw_snippets['function_lookup'] or 
+                                   raw_snippets['argument_building'])
+                        
+                        if not has_calls:
+                            print("  未找到Python函数调用")
+                            
+                    except Exception as e:
+                        print(f"提取Python调用信息时出错: {e}")
+                        
+            except Exception as e:
+                print(f"分析Python调用时出错: {e}")
         else:
             print("\n未找到C文件，跳过C调用图分析")
 

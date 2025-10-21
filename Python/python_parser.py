@@ -14,7 +14,7 @@ class PythonCodeParser:
     
     def __init__(self):
         # 初始化tree-sitter解析器
-        self.python_language = tree_sitter.Language(tspy.language())
+        self.python_language = tree_sitter.Language(tspy.language(), "python")
     
     def parse_file(self, file_path: str) -> Dict[str, Any]:
         """
@@ -86,7 +86,8 @@ class PythonCodeParser:
             return {'functions': [], 'calls': [], 'call_graph': {}}
         
         # 创建解析器
-        parser = tree_sitter.Parser(self.python_language)
+        parser = tree_sitter.Parser()
+        parser.set_language(self.python_language)
         
         # 解析代码
         tree = parser.parse(bytes(code_string, 'utf8'))
