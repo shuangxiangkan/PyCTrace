@@ -176,7 +176,3 @@ class PythonCallExtractor:
             'PyList_New', 'PyList_SetItem'
         ]
         return any(api in call_text for api in arg_building_apis)
-
-
-# 便捷函数已移除，请使用 c_parser.py 中的统一API
-# 例如：CCodeParser().extract_python_calls(file_path)
