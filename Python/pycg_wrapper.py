@@ -123,6 +123,171 @@ class PyCGWrapper:
             raise RuntimeError("需要先调用 analyze() 方法进行分析")
         
         return self.cg.output_classes()
+    
+    def get_external_calls(self, include_builtin: bool = True,
+                          product: str = "", forge: str = "PyPI",
+                          version: str = "0.1.0", timestamp: int = 0) -> Dict[str, Any]:
+        """
+        获取所有外部调用信息（基于 FASTEN 格式，更精确）
+        
+        使用 FASTEN 格式来获取外部调用信息，明确区分 internal 和 external modules。
+        
+        Args:
+            include_builtin: 是否包含内置函数，默认为 True
+            product: 包名（用于 FASTEN 格式）
+            forge: 来源（用于 FASTEN 格式）
+            version: 版本号（用于 FASTEN 格式）
+            timestamp: 时间戳（用于 FASTEN 格式）
+            
+        Returns:
+            Dict: 完整的外部调用信息
+                {
+                    'undefined_functions': [函数名列表],
+                    'callers': {函数名: [调用者列表]},
+                    'by_module': {模块: [函数列表]},
+                    'statistics': {统计信息},
+                    'call_edges': [(caller, callee), ...],
+                    'fasten_details': {FASTEN格式的详细信息}
+                }
+        """
+        if self.cg is None:
+            raise RuntimeError("需要先调用 analyze() 方法进行分析")
+        
+        # 获取 FASTEN 格式的调用图
+        fasten_cg = self.get_fasten_call_graph(product, forge, version, timestamp)
+        
+        # 提取模块信息
+        external_modules_raw = fasten_cg.get('modules', {}).get('external', {})
+        internal_modules = fasten_cg.get('modules', {}).get('internal', {})
+        
+        # 提取调用信息
+        graph = fasten_cg.get('graph', {})
+        internal_calls = graph.get('internalCalls', [])
+        external_calls_raw = graph.get('externalCalls', [])
+        
+        # 构建节点ID到函数名的映射
+        id_to_func = {}
+        
+        # 处理内部模块
+        for module_uri, module_info in internal_modules.items():
+            namespaces = module_info.get('namespaces', {})
+            for node_id, ns_info in namespaces.items():
+                namespace = ns_info.get('namespace', '')
+                id_to_func[node_id] = namespace
+        
+        # 处理外部模块，提取函数名
+        external_functions_list = []  # 外部函数名列表
+        by_module = {}  # 按模块分组
+        
+        for module_name, module_info in external_modules_raw.items():
+            namespaces = module_info.get('namespaces', {})
+            for node_id, ns_info in namespaces.items():
+                namespace = ns_info.get('namespace', '')
+                id_to_func[node_id] = namespace
+                
+                # 提取函数名（从 namespace 中）
+                if '//' in namespace:
+                    # 格式: //module//function 或 //module//module.function
+                    parts = namespace.split('//')
+                    if len(parts) >= 2:
+                        module = parts[1]
+                        func_name = parts[2] if len(parts) > 2 else ''
+                        
+                        # 处理函数名（可能包含模块前缀）
+                        if func_name and '.' in func_name:
+                            # 如 host.tick，去掉模块前缀
+                            func_name = func_name.split('.')[-1]
+                        
+                        # 构建完整的函数名
+                        if module == '.builtin':
+                            full_name = f'<builtin>.{func_name}' if func_name else '<builtin>'
+                        else:
+                            full_name = f'{module}.{func_name}' if func_name else module
+                        
+                        external_functions_list.append(full_name)
+                        
+                        # 按模块分组
+                        if module not in by_module:
+                            by_module[module] = []
+                        if full_name not in by_module[module]:
+                            by_module[module].append(full_name)
+        
+        # 过滤内置函数（如果需要）
+        if not include_builtin:
+            external_functions_list = [f for f in external_functions_list 
+                                       if not f.startswith('<builtin>.')]
+            # 也从 by_module 中移除内置模块
+            by_module = {k: v for k, v in by_module.items() 
+                        if k != '.builtin'}
+        
+        # 解析外部调用，构建调用边和调用者映射
+        call_edges = []
+        callers_map = {}
+        
+        for call in external_calls_raw:
+            caller_id = str(call[0])
+            callee_id = str(call[1])
+            caller_name = id_to_func.get(caller_id, f"node_{caller_id}")
+            callee_name = id_to_func.get(callee_id, f"node_{callee_id}")
+            
+            # 转换 callee_name 为标准格式
+            if '//' in callee_name:
+                parts = callee_name.split('//')
+                if len(parts) >= 2:
+                    module = parts[1]
+                    func_name = parts[2] if len(parts) > 2 else ''
+                    
+                    # 处理函数名（可能包含模块前缀）
+                    if func_name and '.' in func_name:
+                        # 如 host.tick，去掉模块前缀
+                        func_name = func_name.split('.')[-1]
+                    
+                    if module == '.builtin':
+                        callee_standard = f'<builtin>.{func_name}' if func_name else '<builtin>'
+                    else:
+                        callee_standard = f'{module}.{func_name}' if func_name else module
+                else:
+                    callee_standard = callee_name
+            else:
+                callee_standard = callee_name
+            
+            # 过滤内置函数（如果需要）
+            if not include_builtin and callee_standard.startswith('<builtin>.'):
+                continue
+            
+            # 添加调用边
+            call_edges.append((caller_name, callee_standard))
+            
+            # 构建 callers 映射
+            if callee_standard not in callers_map:
+                callers_map[callee_standard] = []
+            if caller_name not in callers_map[callee_standard]:
+                callers_map[callee_standard].append(caller_name)
+        
+        # 统计信息
+        statistics = {
+            'total_undefined': len(set(external_functions_list)),
+            'modules_count': len(by_module),
+            'modules': list(by_module.keys()),
+            'by_module': {mod: len(funcs) for mod, funcs in by_module.items()},
+            'total_call_edges': len(call_edges),
+            'total_external_calls': len(external_calls_raw),
+            'total_internal_calls': len(internal_calls)
+        }
+        
+        return {
+            'undefined_functions': sorted(list(set(external_functions_list))),
+            'callers': callers_map,
+            'by_module': by_module,
+            'statistics': statistics,
+            'call_edges': call_edges,
+            'fasten_details': {
+                'external_modules': external_modules_raw,
+                'internal_modules': internal_modules,
+                'id_to_func_map': id_to_func,
+                'graph': graph
+            }
+        }
 
 
 def generate_call_graph(file_path: str, package: Optional[str] = None, 
