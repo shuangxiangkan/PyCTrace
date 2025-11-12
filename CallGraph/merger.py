@@ -280,7 +280,7 @@ def extract_and_merge_from_c_file(
     Returns:
         Dict: 合并后的调用图数据
     """
-    from C.c_parser import CCodeParser
+    from C.py_module_extractor import CCodeParser
     from Python.python_parser import PythonCodeParser
     
     # 1. 构建Python相关的C调用图

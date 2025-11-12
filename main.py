@@ -8,7 +8,7 @@ import os
 import argparse
 from Utils import FileCollector
 from Utils.graph_visualizer import generate_call_graph_visualization
-from C.c_parser import extract_python_strings, CCodeParser
+from C.py_module_extractor import extract_python_strings, CCodeParser
 from Python.python_parser import PythonCodeParser
 
 

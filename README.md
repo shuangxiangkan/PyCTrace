@@ -101,7 +101,7 @@ python main.py /path/to/c_code_directory --merge -v
 ```
 PyCTrace/
 ├── C/                                   # C 代码解析模块
-│   ├── c_parser.py                     # C代码解析器
+│   ├── py_module_extractor.py                     # C代码解析器
 │   ├── python_registration_extractor.py # Python函数注册信息提取器
 │   └── python_call_extractor.py        # Python调用提取器
 ├── Python/                              # Python 代码解析模块
