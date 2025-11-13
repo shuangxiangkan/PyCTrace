@@ -21,14 +21,13 @@ class BaseAnalyzer:
             language: 编程语言 ("c" 或 "cpp")
         """
         if language == "c":
-            self.language = Language(tsc.language(), "c")
+            self.language = Language(tsc.language())
         elif language == "cpp":
-            self.language = Language(tscpp.language(), "cpp")
+            self.language = Language(tscpp.language())
         else:
             raise ValueError(f"Unsupported language: {language}")
         
-        self.parser = Parser()
-        self.parser.set_language(self.language)
+        self.parser = Parser(self.language)
         self.language_name = language
     
     def parse_code(self, code: str):
