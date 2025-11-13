@@ -26,3 +26,7 @@ mypy==1.6.1
 # 测试框架（开发依赖）
 pytest==7.4.3
 pytest-cov==4.1.0
+
+# LLM
+anthropic==0.21.3
+python-dotenv==1.0.0
