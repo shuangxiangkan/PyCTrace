@@ -80,50 +80,60 @@ python main.py /path/to/c_code_directory --merge -v
 
 程序会在 `output/` 目录下生成以下文件：
 
-### 普通模式
-- `c_call_graph_<filename>.{dot,pdf,mmd,txt}` - C代码调用图
-- `python_call_graph_<filename>.{dot,pdf,mmd,txt}` - Python代码调用图
+### Python 分析结果
+- `python_fasten_callgraph.json` - Python FASTEN 格式调用图
 
-### Python-Only模式 (--python-only)
-- `python_related_call_graph_<filename>.{dot,pdf,mmd,txt}` - Python相关的C调用图
+### C 模块注册信息
+- `c_python_module_registrations.json` - C 模块注册信息（JSON 格式，含元数据）
+- `c_python_module_registrations.txt` - C 模块注册信息（TXT 格式，纯代码）
 
-### 合并模式 (--merge)
-- `merged_call_graph_<filename>.{dot,pdf,mmd,txt}` - 合并的Python-C调用图
+### LLM 解析结果
+- `c_python_module_registrations_llm.json` - LLM 解析后的结构化模块信息
+- `module_registration_prompt.txt` - 发送给 LLM 的 prompt
+- `module_registration_response.txt` - LLM 的原始响应
 
-文件格式说明：
-- `.dot` - Graphviz DOT 格式
-- `.pdf` - PDF 格式调用图（需要安装Graphviz）
-- `.mmd` - Mermaid 格式
-- `.txt` - 文本格式
+文件说明：
+- FASTEN 格式：标准化的软件依赖分析格式
+- LLM 解析：使用 Claude 自动提取模块名、函数映射、参数类型等信息
 
 ## 项目结构
 
 ```
 PyCTrace/
 ├── C/                                   # C 代码解析模块
-│   ├── py_module_extractor.py                     # C代码解析器
-│   ├── python_registration_extractor.py # Python函数注册信息提取器
-│   └── python_call_extractor.py        # Python调用提取器
+│   └── py_module_extractor.py          # C 模块注册信息提取器
 ├── Python/                              # Python 代码解析模块
-│   └── python_parser.py                # Python代码解析器
-├── CallGraph/                           # 调用图处理模块
-│   ├── __init__.py
-│   └── merger.py                        # Python-C调用图合并器
-├── Utils/                               # 工具模块
-│   ├── file_collector.py               # 文件收集器
-│   ├── graph_visualizer.py             # 调用图可视化
-│   └── string_utils.py                 # 字符串处理工具
+│   └── pycg_wrapper.py                  # PyCG 包装器（FASTEN 调用图生成）
+├── llm/                                 # LLM 解析模块
+│   ├── __init__.py                      # 包初始化
+│   ├── llm_client.py                    # Claude API 客户端
+│   ├── module_registration_prompts.py   # 模块注册 prompt 模板
+│   ├── module_registration_schema.py    # 输出格式定义
+│   ├── parse_module_registration.py     # LLM 解析器
+│   └── README.md                        # LLM 模块文档
+├── output/                              # 输出目录
 ├── main.py                              # 主程序入口
 ├── requirements.txt                     # Python 依赖
-└── README.md                           # 项目说明
+└── README.md                            # 项目说明
 ```
 
 ## 依赖说明
 
 - **tree-sitter**: 代码解析引擎
-- **graphviz**: Python Graphviz 接口
-- **networkx**: 图数据结构处理
-- **click**: 命令行界面
+- **pycg**: Python 调用图生成器
+- **anthropic**: Claude API 客户端
+- **python-dotenv**: 环境变量管理
+
+## 环境配置
+
+需要在项目根目录创建 `.env` 文件来配置 Claude API Key：
+
+```bash
+# 二选一即可
+ANTHROPIC_API_KEY=your_api_key_here
+# 或
+CLAUDE_API_KEY=your_api_key_here
+```
 
 ## 许可证
 
