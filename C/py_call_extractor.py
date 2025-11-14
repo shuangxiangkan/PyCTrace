@@ -4,7 +4,10 @@ Python调用提取器
 
 from typing import Dict, List, Optional, Set
 from tree_sitter import Language, Parser, Node
-from analysis import DDG
+try:
+    from .analysis import DDG
+except ImportError:
+    from analysis import DDG
 import tree_sitter_c
 import json    
 
@@ -351,47 +354,73 @@ class PythonCallExtractor:
 def format_call_info_json(result: Dict) -> str:
     """
     格式化输出Python C API调用的完整上下文（JSON格式）
-    为大模型提供结构化数据
+    格式与模块注册保持一致，包含type, name, code等元数据
     """
+    python_calls = result.get('python_calls', [])
     
-    def convert_to_serializable(obj):
-        if isinstance(obj, set):
-            return list(obj)
-        elif isinstance(obj, dict):
-            return {k: convert_to_serializable(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [convert_to_serializable(item) for item in obj]
-        else:
-            return obj
+    formatted_calls = []
+    for call in python_calls:
+        call_entry = {
+            "call_info": {
+                "type": "Python_C_API_Call",
+                "function": call.get('call_function', ''),
+                "code": call.get('call_code', ''),
+                "line": call.get('call_line', 0),
+                "file": call.get('file', ''),
+                "containing_function": call.get('containing_function', '')
+            },
+            "context_statements": [
+                {
+                    "line": stmt['line'],
+                    "code": stmt['text'],
+                    "type": stmt['type']
+                }
+                for stmt in call.get('context_statements', [])
+            ]
+        }
+        
+        if call.get('function_definitions'):
+            call_entry["function_definitions"] = [
+                {
+                    "type": "Helper_Function",
+                    "name": func_def.get('function_name', ''),
+                    "code": func_def.get('code', ''),
+                    "line": func_def.get('line', 0),
+                    "file": func_def.get('file', '')
+                }
+                for func_def in call['function_definitions']
+            ]
+        
+        formatted_calls.append(call_entry)
     
-    serializable_result = convert_to_serializable(result)
-    return json.dumps(serializable_result, indent=2, ensure_ascii=False)
+    output = {"python_api_calls": formatted_calls}
+    return json.dumps(output, indent=2, ensure_ascii=False)
 
 
 def format_call_info_text(result: Dict) -> str:
     """
     格式化输出Python C API调用的完整代码片段（文本格式）
-    只输出最核心的代码上下文
+    格式与模块注册保持一致，使用分隔线和标题
     """
     lines = []
+    python_calls = result.get('python_calls', [])
     
-    for i, call in enumerate(result['python_calls'], 1):
-        lines.append(f"# Call {i}: {call['call_function']} at {call['file']}:{call['call_line']}")
+    for i, call in enumerate(python_calls, 1):
+        lines.append("")
+        lines.append("=" * 80)
+        lines.append(f"C中的Python API调用 #{i}")
+        lines.append("=" * 80)
         lines.append("")
         
         if call.get('context_statements'):
             for stmt in call['context_statements']:
                 lines.append(stmt['text'])
+            lines.append("")
         
         if call.get('function_definitions'):
-            lines.append("")
-            lines.append("# Related function definitions:")
             for func_def in call['function_definitions']:
                 lines.append(func_def['code'])
-        
-        lines.append("")
-        lines.append("-" * 80)
-        lines.append("")
+                lines.append("")
     
     return "\n".join(lines)
 

@@ -6,6 +6,7 @@ C代码解析器
 from typing import Dict, List, Optional
 from tree_sitter import Language, Parser
 import tree_sitter_c
+import json
 
 
 class CCodeParser:
@@ -30,17 +31,18 @@ class CCodeParser:
         for file_path in file_paths:
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 code = f.read()
-            result = self._parse_single_code(code)
+            result = self._parse_single_code(code, file_path)
             all_results.append(result)
         
         return self._merge_results(all_results)
     
-    def _parse_single_code(self, code: str) -> Dict:
+    def _parse_single_code(self, code: str, file_path: str) -> Dict:
         """
         解析单个C代码并提取组件（不构建链路）
         
         Args:
             code: C代码字符串
+            file_path: 文件路径
             
         Returns:
             Dict: 包含提取的组件
@@ -49,10 +51,10 @@ class CCodeParser:
         root_node = tree.root_node
         
         result = {
-            'py_method_defs': self._extract_py_method_defs(root_node, code),
-            'py_module_defs': self._extract_py_module_defs(root_node, code),
-            'py_init_funcs': self._extract_py_init_funcs(root_node, code),
-            'py_c_functions': self._extract_all_py_c_functions(root_node, code)
+            'py_method_defs': self._extract_py_method_defs(root_node, code, file_path),
+            'py_module_defs': self._extract_py_module_defs(root_node, code, file_path),
+            'py_init_funcs': self._extract_py_init_funcs(root_node, code, file_path),
+            'py_c_functions': self._extract_all_py_c_functions(root_node, code, file_path)
         }
         
         return result
@@ -127,7 +129,7 @@ class CCodeParser:
         
         return merged
     
-    def _extract_py_method_defs(self, root_node, code: str) -> List[Dict]:
+    def _extract_py_method_defs(self, root_node, code: str, file_path: str) -> List[Dict]:
         """提取PyMethodDef数组定义"""
         method_defs = []
         
@@ -144,6 +146,7 @@ class CCodeParser:
                         'type': 'PyMethodDef',
                         'name': var_name,
                         'code': decl_text,
+                        'file_path': file_path,
                         'start_line': node.start_point[0] + 1,
                         'end_line': node.end_point[0] + 1,
                         'start_byte': node.start_byte,
@@ -152,7 +155,7 @@ class CCodeParser:
         
         return method_defs
     
-    def _extract_py_module_defs(self, root_node, code: str) -> List[Dict]:
+    def _extract_py_module_defs(self, root_node, code: str, file_path: str) -> List[Dict]:
         """提取PyModuleDef结构定义"""
         module_defs = []
         
@@ -166,6 +169,7 @@ class CCodeParser:
                         'type': 'PyModuleDef',
                         'name': var_name,
                         'code': decl_text,
+                        'file_path': file_path,
                         'start_line': node.start_point[0] + 1,
                         'end_line': node.end_point[0] + 1,
                         'start_byte': node.start_byte,
@@ -174,7 +178,7 @@ class CCodeParser:
         
         return module_defs
     
-    def _extract_py_init_funcs(self, root_node, code: str) -> List[Dict]:
+    def _extract_py_init_funcs(self, root_node, code: str, file_path: str) -> List[Dict]:
         """提取PyInit_*函数定义"""
         init_funcs = []
         
@@ -189,6 +193,7 @@ class CCodeParser:
                         'type': 'PyInit_Function',
                         'name': func_name,
                         'code': func_text,
+                        'file_path': file_path,
                         'start_line': node.start_point[0] + 1,
                         'end_line': node.end_point[0] + 1,
                         'start_byte': node.start_byte,
@@ -217,7 +222,7 @@ class CCodeParser:
         
         return func_names
     
-    def _extract_all_py_c_functions(self, root_node, code: str) -> List[Dict]:
+    def _extract_all_py_c_functions(self, root_node, code: str, file_path: str) -> List[Dict]:
         """
         提取所有符合Python/C API签名的函数
         """
@@ -236,6 +241,7 @@ class CCodeParser:
                         'type': 'Python_C_Function',
                         'name': func_name,
                         'code': func_text,
+                        'file_path': file_path,
                         'start_line': node.start_point[0] + 1,
                         'end_line': node.end_point[0] + 1,
                         'start_byte': node.start_byte,
@@ -460,3 +466,61 @@ def format_registration_info(result: Dict, verbose: bool = True) -> str:
             lines.append("")
     
     return "\n".join(lines).strip()
+
+
+def format_registration_info_json(result: Dict) -> str:
+    """
+    格式化输出模块注册信息（JSON格式）
+    与c_python_call_extraction.json保持一致的格式
+    
+    Args:
+        result: parse_files返回的结果
+        
+    Returns:
+        str: JSON格式的字符串
+    """
+    json_data = {
+        "module_chains": result.get('module_chains', [])
+    }
+    return json.dumps(json_data, indent=2, ensure_ascii=False)
+
+
+def format_registration_info_text(result: Dict) -> str:
+    """
+    格式化输出模块注册信息（文本格式）
+    与c_python_call_extraction.txt保持一致的格式
+    
+    Args:
+        result: parse_files返回的结果
+        
+    Returns:
+        str: 文本格式的字符串
+    """
+    lines = []
+    
+    if result.get('module_chains'):
+        for idx, chain in enumerate(result['module_chains'], 1):
+            lines.append("")
+            lines.append("=" * 80)
+            lines.append(f"C中的python注册模块 #{idx}")
+            lines.append("=" * 80)
+            lines.append("")
+            
+            if chain.get('init_function_info'):
+                lines.append(f"{chain['init_function_info']['code']}")
+                lines.append("")
+            
+            if chain.get('module_def_info'):
+                lines.append(f"{chain['module_def_info']['code']}")
+                lines.append("")
+            
+            if chain.get('method_def_info'):
+                lines.append(f"{chain['method_def_info']['code']}")
+                lines.append("")
+            
+            if chain.get('c_functions'):
+                for func in chain['c_functions']:
+                    lines.append(f"{func['code']}")
+                    lines.append("")
+    
+    return "\n".join(lines)
