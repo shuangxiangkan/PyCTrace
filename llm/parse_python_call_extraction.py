@@ -1,4 +1,3 @@
-import os
 import sys
 import json
 from pathlib import Path
@@ -68,16 +67,13 @@ def parse_call_with_llm(code: str, client: ClaudeClient, output_dir: Path = None
         print(f"Raw response: {response}")
         return {
             "error": "JSON parsing failed",
-            "raw_response": response,
-            "python_calls": []
+            "raw_response": response
         }
     except Exception as e:
         print(f"LLM call error: {e}")
         return {
-            "error": str(e),
-            "python_calls": []
+            "error": str(e)
         }
-
 
 def parse_python_call_file(input_file: str, output_file: str, model: str = "claude-sonnet-4-20250514"):
     print(f"Reading file: {input_file}")
@@ -106,6 +102,7 @@ def parse_python_call_file(input_file: str, output_file: str, model: str = "clau
     if current_call:
         call_codes.append('\n'.join(current_call))
     
+    all_python_code = []
     all_results = []
     
     for idx, code in enumerate(call_codes, 1):
@@ -113,21 +110,38 @@ def parse_python_call_file(input_file: str, output_file: str, model: str = "clau
         result = parse_call_with_llm(code, client, output_dir)
         
         if "error" not in result:
-            all_results.extend(result.get("python_calls", []))
+            python_code = result.get("python_code", "")
+            if python_code:
+                all_python_code.append(f"# Block {idx}\n{python_code}\n")
+                all_results.append({
+                    "block_id": idx,
+                    "python_code": python_code
+                })
         else:
             print(f"  Error parsing call block #{idx}: {result.get('error')}")
     
     final_result = {
-        "python_calls": all_results
+        "total_blocks": len(all_results),
+        "blocks": all_results
     }
     
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(final_result, f, indent=2, ensure_ascii=False)
     
-    print(f"\nSaving result to: {output_file}")
-    print(f"✓ Successfully parsed {len(call_codes)} call blocks")
-    print(f"✓ Extracted {len(all_results)} Python calls")
-    print(f"✓ Result saved to: {output_file}")
+    print(f"✓ JSON result saved to: {output_file}")
+    
+    if all_python_code:
+        py_output_dir = output_dir / "py"
+        py_output_dir.mkdir(exist_ok=True)
+        py_output_file = py_output_dir / "python_call_in_c.py"
+        
+        with open(py_output_file, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(all_python_code))
+        
+        print(f"✓ Python code saved to: {py_output_file}")
+    
+    print(f"\n✓ Successfully parsed {len(call_codes)} call blocks")
+    print(f"✓ Extracted {len(all_python_code)} Python code blocks")
 
 
 if __name__ == "__main__":

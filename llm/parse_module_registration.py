@@ -76,6 +76,52 @@ def parse_module_with_llm(code: str, client: ClaudeClient, output_dir: Path = No
             "error": str(e)
         }
 
+def generate_function_stub(func_info: dict) -> str:
+    python_name = func_info['python_name']
+    param_types = func_info.get('param_types', [])
+    return_type = func_info.get('return_type', 'None')
+    
+    params_list = []
+    for i, param_type in enumerate(param_types):
+        params_list.append(f"arg{i}: {param_type}")
+    
+    params_str = ', '.join(params_list) if params_list else ''
+    
+    return f"def {python_name}({params_str}) -> {return_type}:\n    pass\n"
+
+
+def generate_module_stub(module_info: dict) -> str:
+    functions = module_info.get('functions', [])
+    
+    lines = []
+    
+    for func_info in functions:
+        lines.append(generate_function_stub(func_info))
+        lines.append('\n')
+    
+    return ''.join(lines)
+
+
+def save_python_stubs(json_data: dict, output_dir: Path):
+    modules = json_data.get('modules', [])
+    
+    if not modules:
+        return
+    
+    py_output_dir = output_dir / "py"
+    py_output_dir.mkdir(exist_ok=True)
+    
+    for module_info in modules:
+        module_name = module_info['module_name']
+        stub_code = generate_module_stub(module_info)
+        
+        output_file = py_output_dir / f"{module_name}.py"
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(stub_code)
+        
+        print(f"✓ Python 接口文件已生成: {output_file}")
+
+
 def parse_registration_file(input_file: str, output_file: str, model: str = "claude-sonnet-4-20250514"):
     print(f"Reading file: {input_file}")
     
@@ -125,5 +171,8 @@ def parse_registration_file(input_file: str, output_file: str, model: str = "cla
     
     print(f"✓ Successfully parsed {len(all_modules)} modules")
     print(f"✓ Result saved to: {output_file}")
+    
+    print(f"\n正在生成 Python 接口文件...")
+    save_python_stubs(output_data, output_dir)
     
     return output_data
