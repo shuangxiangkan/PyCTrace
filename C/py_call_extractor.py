@@ -79,7 +79,7 @@ class PythonCallExtractor:
             for func_node in functions:
                 func_name = self._get_function_name_from_definition(func_node, code)
                 if func_name:
-                    func_code = code[func_node.start_byte:func_node.end_byte]
+                    func_code = func_node.text.decode('utf-8')
                     func_line = func_node.start_point[0] + 1
                     
                     if func_name not in self.all_functions:
@@ -170,7 +170,8 @@ class PythonCallExtractor:
     def _get_function_name(self, call_node: Node, code: str) -> str:
         for child in call_node.children:
             if child.type in ['identifier', 'field_expression']:
-                return code[child.start_byte:child.end_byte]
+                func_name = child.text.decode('utf-8')
+                return func_name
         return ""
     
     def _is_python_call_function(self, function_name: str) -> bool:
@@ -209,7 +210,7 @@ class PythonCallExtractor:
         """
         function_name = self._get_function_name(call_node, code)
         call_line = call_node.start_point[0] + 1
-        call_code = code[call_node.start_byte:call_node.end_byte]
+        call_code = call_node.text.decode('utf-8')
         
         vars_to_track = set()
         for node in ddg.nodes:
@@ -336,7 +337,7 @@ class PythonCallExtractor:
             if node.type == 'function_declarator':
                 for child in node.children:
                     if child.type == 'identifier':
-                        return code[child.start_byte:child.end_byte]
+                        return child.text.decode('utf-8')
             elif node.type == 'pointer_declarator':
                 for child in node.children:
                     result = extract_from_node(child)
