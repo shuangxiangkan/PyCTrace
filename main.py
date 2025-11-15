@@ -147,7 +147,12 @@ def main():
         sys.exit(1)
     
     folder_path = sys.argv[1]
-    output_dir = sys.argv[2] if len(sys.argv) > 2 else "output"
+    
+    if len(sys.argv) > 2:
+        output_dir = sys.argv[2]
+    else:
+        folder_name = os.path.basename(os.path.abspath(folder_path))
+        output_dir = f"{folder_name}_output"
     
     os.makedirs(output_dir, exist_ok=True)
     

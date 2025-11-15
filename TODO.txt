@@ -1,3 +1,9 @@
 1. PyCTrace/Python/python_parser.py 可以删掉
 
 2. 是不是需要看一下文档，然后找出所有跟在C中定义和使用python相关代码的所有API?
+
+Pyright + Flake8/pyflakes（组合方案）
+
+Pyright：主要做 类型检查
+
+Flake8/pyflakes：检查 未定义函数、未定义变量

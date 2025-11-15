@@ -50,3 +50,4 @@ Thumbs.db
 output*/
 test/python_output/
 .env
+*_output/
