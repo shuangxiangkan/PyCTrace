@@ -1,6 +1,6 @@
-# LLM Module Registration Parser
+# LLM Parser for C/Python Code Analysis
 
-Automatically parse Python module registration information from C code using Claude LLM.
+Automatically parse Python module registration and Python call information from C code using Claude LLM.
 
 ## 📂 Project Structure
 
@@ -11,10 +11,14 @@ llm/
 ├── module_registration_prompts.py        # Prompt templates for module registration
 ├── module_registration_schema.py         # Output format definition and parameter mapping
 ├── parse_module_registration.py          # Main program: Parse module registration
+├── python_call_extraction_prompts.py     # Prompt templates for Python call extraction
+├── parse_python_call_extraction.py       # Main program: Parse Python calls
 └── README.md                             # This file
 ```
 
 ## 🎯 Features
+
+### 1. Module Registration Parser
 
 Extract from Python module registration code in C:
 - **Module Name**
@@ -22,6 +26,14 @@ Extract from Python module registration code in C:
 - **Parameter Types** (extracted from `PyArg_ParseTuple`)
 - **Parameter Count**
 - **Return Type**
+- **Prompt and Response Logging** (saved to output/ folder)
+
+### 2. Python Call Extraction Parser
+
+Extract from C code that calls Python functions:
+- **Module Name**: The Python module being imported
+- **Function Name**: The Python function being called
+- **Arguments**: The arguments passed to the function (extracted from `Py_BuildValue`, `PyTuple_Pack`, etc.)
 - **Prompt and Response Logging** (saved to output/ folder)
 
 ## ⚙️ Environment Setup
@@ -37,15 +49,22 @@ CLAUDE_API_KEY=your_api_key_here
 
 ## 🚀 Usage
 
-### Quick Start
+### Automatic Usage (Recommended)
+
+When you run the main analysis tool, both parsers are automatically invoked:
 
 ```bash
 cd /home/kansx/Papers/Python-C/PyCTrace
-source .venv/bin/activate
-python llm/parse_module_registration.py
+python main.py /path/to/your/code
 ```
 
-### Command Line Arguments
+This will automatically:
+1. Extract module registration info and parse with LLM
+2. Extract Python call info and parse with LLM
+
+### Manual Usage
+
+#### Module Registration Parser
 
 ```bash
 python llm/parse_module_registration.py [input_file] [output_file] [model]
@@ -56,25 +75,41 @@ python llm/parse_module_registration.py [input_file] [output_file] [model]
 - `output_file`: Default `output/c_python_module_registrations_llm.json`
 - `model`: Default `claude-sonnet-4-20250514`
 
-### Examples
+**Examples:**
 
 ```bash
 # Use default paths
 python llm/parse_module_registration.py
 
-# Specify input file
-python llm/parse_module_registration.py path/to/input.txt
-
 # Specify input and output
 python llm/parse_module_registration.py input.txt output.json
+```
 
-# Specify model
-python llm/parse_module_registration.py input.txt output.json claude-3-5-sonnet-20241022
+#### Python Call Extraction Parser
+
+```bash
+python llm/parse_python_call_extraction.py [input_file] [output_file] [model]
+```
+
+**Parameters:**
+- `input_file`: Default `output/c_python_call_extraction.txt`
+- `output_file`: Default `output/c_python_call_extraction_llm.json`
+- `model`: Default `claude-sonnet-4-20250514`
+
+**Examples:**
+
+```bash
+# Use default paths
+python llm/parse_python_call_extraction.py
+
+# Specify input and output
+python llm/parse_python_call_extraction.py input.txt output.json
 ```
 
 ## 📊 Output Format
 
-### JSON Output
+### 1. Module Registration JSON Output
+
 ```json
 {
   "total_modules": 1,
@@ -96,12 +131,29 @@ python llm/parse_module_registration.py input.txt output.json claude-3-5-sonnet-
 }
 ```
 
+### 2. Python Call Extraction JSON Output
+
+```json
+{
+  "python_calls": [
+    {
+      "module": "p1",
+      "function": "combine",
+      "arguments": ["4", "5", "7"]
+    }
+  ]
+}
+```
+
 ### Prompt and Response Files
-The parser automatically saves prompts and responses:
-- `output/module_registration_prompt.txt`
-- `output/module_registration_response.txt`
+
+The parsers automatically save prompts and responses:
+- `output/module_registration_prompt.txt` / `output/module_registration_response.txt`
+- `output/python_call_prompt.txt` / `output/python_call_response.txt`
 
 ## 📖 Field Description
+
+### Module Registration Fields
 
 | Field | Type | Description |
 |------|------|------|
@@ -113,6 +165,14 @@ The parser automatically saves prompts and responses:
 | `param_types` | list[string] | List of parameter types |
 | `param_count` | int | Number of parameters |
 | `return_type` | string | Return type |
+
+### Python Call Extraction Fields
+
+| Field | Type | Description |
+|------|------|------|
+| `module` | string | Python module name (e.g., "p1", "host") |
+| `function` | string | Python function name being called |
+| `arguments` | list[string] | Arguments passed to the function |
 
 ## 🔧 Parameter Format Mapping
 

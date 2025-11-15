@@ -8,6 +8,7 @@ from C.py_module_extractor import CCodeParser, format_registration_info_json, fo
 from C.py_call_extractor import PythonCallExtractor, format_call_info_json, format_call_info_text
 from Python.pycg_wrapper import PyCGWrapper
 from llm.parse_module_registration import parse_registration_file
+from llm.parse_python_call_extraction import parse_python_call_file
 
 
 def collect_files(folder_path: str) -> Tuple[List[str], List[str]]:
@@ -187,6 +188,18 @@ def main():
                 print(f"✗ LLM 解析出错: {e}")
                 import traceback
                 traceback.print_exc()
+        
+        print("\n正在使用 LLM 解析 Python 调用信息...")
+        try:
+            call_txt_file = os.path.join(output_dir, "c_python_call_extraction.txt")
+            call_json_file = os.path.join(output_dir, "c_python_call_extraction_llm.json")
+            
+            parse_python_call_file(call_txt_file, call_json_file)
+            
+        except Exception as e:
+            print(f"✗ LLM 解析 Python 调用出错: {e}")
+            import traceback
+            traceback.print_exc()
     
     print("\n" + "=" * 80)
     print("分析完成!")
