@@ -157,7 +157,7 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     
     print("=" * 80)
-    print("PyCTrace - Python-C 代码分析工具")
+    print("PyCTrace - Python-C 跨语言函数调用分析工具")
     print("=" * 80)
     print(f"\n分析目标: {folder_path}")
     print(f"输出目录: {output_dir}")
