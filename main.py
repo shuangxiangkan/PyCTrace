@@ -9,6 +9,7 @@ from C.py_call_extractor import PythonCallExtractor, format_call_info_json, form
 from Python.pycg_wrapper import PyCGWrapper
 from llm.parse_module_registration import parse_registration_file
 from llm.parse_python_call_extraction import parse_python_call_file
+from Utils.c2python import convert_json_to_stubs
 
 
 def collect_files(folder_path: str) -> Tuple[List[str], List[str]]:
@@ -188,6 +189,10 @@ def main():
                 json_file = os.path.join(output_dir, "c_python_module_registrations_llm.json")
                 
                 parse_registration_file(txt_file, json_file)
+                
+                print("\n正在转换为 Python 代码...")
+                py_output_dir = os.path.join(output_dir, "py")
+                convert_json_to_stubs(json_file, py_output_dir)
                 
             except Exception as e:
                 print(f"✗ LLM 解析出错: {e}")

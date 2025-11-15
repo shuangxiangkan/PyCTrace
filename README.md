@@ -92,9 +92,14 @@ python main.py /path/to/c_code_directory --merge -v
 - `module_registration_prompt.txt` - 发送给 LLM 的 prompt
 - `module_registration_response.txt` - LLM 的原始响应
 
+### Python 接口文件
+- `py/` - 自动生成的 Python 接口文件目录
+  - `<module_name>.py` - 根据 C 扩展模块生成的 Python 函数声明
+
 文件说明：
 - FASTEN 格式：标准化的软件依赖分析格式
 - LLM 解析：使用 Claude 自动提取模块名、函数映射、参数类型等信息
+- Python 接口：从 C 扩展自动生成的 Python 函数签名，可用于类型提示和测试
 
 ## 项目结构
 
@@ -111,7 +116,10 @@ PyCTrace/
 │   ├── module_registration_schema.py    # 输出格式定义
 │   ├── parse_module_registration.py     # LLM 解析器
 │   └── README.md                        # LLM 模块文档
+├── Utils/                               # 工具模块
+│   └── c2python.py                      # JSON 转 Python 接口生成器
 ├── output/                              # 输出目录
+│   └── py/                              # 生成的 Python 接口文件
 ├── main.py                              # 主程序入口
 ├── requirements.txt                     # Python 依赖
 └── README.md                            # 项目说明
