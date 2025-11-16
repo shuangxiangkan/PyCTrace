@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import List, Optional
 from dataclasses import dataclass, asdict
-from collections import defaultdict
 from mypy import api
 
 
