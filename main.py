@@ -10,6 +10,7 @@ from Python.pycg_wrapper import PyCGWrapper
 from llm.parse_module_registration import parse_registration_file
 from llm.parse_python_call_extraction import parse_python_call_file
 from checker.type_checker import MypyTypeChecker
+from checker.function_call_checker import PylintCallChecker
 
 
 def collect_files(folder_path: str) -> Tuple[List[str], List[str]]:
@@ -182,6 +183,50 @@ def check_python_types(output_dir: str) -> Dict[str, Any]:
         return {}
 
 
+def check_function_calls(output_dir: str) -> Dict[str, Any]:
+    py_dir = os.path.join(output_dir, "py")
+    
+    if not os.path.exists(py_dir):
+        print("\n未找到生成的 Python 接口文件目录 (py/)，跳过函数调用检查")
+        return {}
+    
+    print(f"\n正在对生成的 Python 接口文件进行函数调用检查...")
+    
+    try:
+        checker = PylintCallChecker(py_dir)
+        issues = checker.check_calls()
+        
+        json_report_file = os.path.join(output_dir, "call_check_report.json")
+        checker.generate_report(json_report_file)
+        
+        if len(issues) == 0:
+            print("✓ 函数调用检查通过，未发现问题")
+        else:
+            print(f"⚠ 函数调用检查发现 {len(issues)} 个问题，详情请查看报告文件")
+        
+        return {
+            "total_issues": len(issues),
+            "issues": [
+                {
+                    "file": issue.file,
+                    "line": issue.line,
+                    "column": issue.column,
+                    "severity": issue.severity,
+                    "code": issue.code,
+                    "message": issue.message,
+                    "symbol": issue.symbol
+                }
+                for issue in issues
+            ]
+        }
+        
+    except Exception as e:
+        print(f"✗ 函数调用检查时出错: {e}")
+        import traceback
+        traceback.print_exc()
+        return {}
+
+
 def main():
     if len(sys.argv) < 2:
         print("用法: python main.py <文件夹路径> [输出目录]")
@@ -251,6 +296,8 @@ def main():
             traceback.print_exc()
     
     check_python_types(output_dir)
+    
+    check_function_calls(output_dir)
     
     print("\n" + "=" * 80)
     print("分析完成!")
