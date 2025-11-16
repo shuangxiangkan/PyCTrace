@@ -51,3 +51,4 @@ output*/
 test/python_output/
 .env
 *_output/
+test/
