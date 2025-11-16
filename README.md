@@ -19,22 +19,6 @@ PyCTrace 是一个用于分析 C 代码中嵌入的 Python 代码的工具，能
 pip install -r requirements.txt
 ```
 
-### 系统依赖
-为了生成 PDF 格式的调用图，需要安装 Graphviz：
-
-**Ubuntu/Debian:**
-```bash
-sudo apt-get install graphviz
-```
-
-**macOS:**
-```bash
-brew install graphviz
-```
-
-**Windows:**
-从 [Graphviz 官网](https://graphviz.org/download/) 下载并安装
-
 ## 使用方法
 
 ### 基本用法
@@ -92,14 +76,21 @@ python main.py /path/to/c_code_directory --merge -v
 - `module_registration_prompt.txt` - 发送给 LLM 的 prompt
 - `module_registration_response.txt` - LLM 的原始响应
 
+### Python C API 调用分析
+- `c_python_call_extraction_llm.json` - LLM 解析后的 Python 代码（结构化）
+- `python_call_prompt.txt` - Python 调用提取 Prompt
+- `python_call_response.txt` - Python 调用提取 Response
+
 ### Python 接口文件
-- `py/` - 自动生成的 Python 接口文件目录
+- `py/` - 自动生成的 Python 文件目录
   - `<module_name>.py` - 根据 C 扩展模块生成的 Python 函数声明
+  - `python_call_in_c.py` - 从 C 代码提取的完整 Python 代码
 
 文件说明：
 - FASTEN 格式：标准化的软件依赖分析格式
 - LLM 解析：使用 Claude 自动提取模块名、函数映射、参数类型等信息
 - Python 接口：从 C 扩展自动生成的 Python 函数签名，可用于类型提示和测试
+- Python 代码提取：将 C 代码中嵌入的 Python 代码转换为可执行的 Python 文件
 
 ## 项目结构
 

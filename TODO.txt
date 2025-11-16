@@ -7,3 +7,6 @@ Pyright + Flake8/pyflakes（组合方案）
 Pyright：主要做 类型检查
 
 Flake8/pyflakes：检查 未定义函数、未定义变量
+
+有问题：
+python main.py /home/kansx/Papers/Python-C/C_with_Python/TypeMismatching/sample1
