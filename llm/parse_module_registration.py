@@ -9,12 +9,14 @@ try:
         SYSTEM_PROMPT_MODULE_REGISTRATION, 
         get_module_registration_analysis_prompt
     )
+    from .module_registration_schema import C_TYPE_TO_PYTHON_TYPE
 except ImportError:
     from llm_client import ClaudeClient
     from module_registration_prompts import (
         SYSTEM_PROMPT_MODULE_REGISTRATION, 
         get_module_registration_analysis_prompt
     )
+    from module_registration_schema import C_TYPE_TO_PYTHON_TYPE
 
 
 def save_prompt_and_response(prompt: str, response: str, output_dir: Path):
@@ -76,6 +78,10 @@ def parse_module_with_llm(code: str, client: ClaudeClient, output_dir: Path = No
             "error": str(e)
         }
 
+def convert_c_type_to_python(c_type: str) -> str:
+    return C_TYPE_TO_PYTHON_TYPE.get(c_type, c_type)
+
+
 def generate_function_stub(func_info: dict) -> str:
     python_name = func_info['python_name']
     param_types = func_info.get('param_types', [])
@@ -83,11 +89,14 @@ def generate_function_stub(func_info: dict) -> str:
     
     params_list = []
     for i, param_type in enumerate(param_types):
-        params_list.append(f"arg{i}: {param_type}")
+        python_type = convert_c_type_to_python(param_type)
+        params_list.append(f"arg{i}: {python_type}")
     
     params_str = ', '.join(params_list) if params_list else ''
     
-    return f"def {python_name}({params_str}) -> {return_type}:\n    pass\n"
+    python_return_type = convert_c_type_to_python(return_type) if return_type != 'None' else 'None'
+    
+    return f"def {python_name}({params_str}) -> {python_return_type}:\n    pass\n"
 
 
 def generate_module_stub(module_info: dict) -> str:

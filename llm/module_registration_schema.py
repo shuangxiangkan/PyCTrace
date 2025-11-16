@@ -63,6 +63,36 @@ PARAM_FORMAT_MAPPING = {
 }
 
 
+C_TYPE_TO_PYTHON_TYPE = {
+    "long": "int",
+    "unsigned long": "int",
+    "long long": "int",
+    "unsigned long long": "int",
+    "int": "int",
+    "short": "int",
+    "unsigned char": "int",
+    "char (length 1)": "str",
+    "int (character code)": "int",
+    "float": "float",
+    "double": "float",
+    "complex (Py_complex)": "complex",
+    "string (char*)": "str",
+    "string with length (char*, int)": "str",
+    "string or None (char*)": "str | None",
+    "string or None with length (char*, int)": "str | None",
+    "unicode string (Py_UNICODE*)": "str",
+    "unicode string with length (Py_UNICODE*, int)": "str",
+    "PyObject*": "object",
+    "PyObject* (with type check)": "object",
+    "PyObject* (with converter function)": "object",
+    "read-write buffer (Py_buffer*)": "bytes",
+    "encoded string": "str",
+    "encoded string with encoding": "str",
+    "encoded string with length": "str",
+    "encoded string with encoding and length": "str",
+}
+
+
 def get_schema_string() -> str:
     import json
     return json.dumps(OUTPUT_SCHEMA, indent=2, ensure_ascii=False)
