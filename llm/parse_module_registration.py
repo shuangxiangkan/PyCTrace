@@ -164,7 +164,7 @@ def parse_registration_file(input_file: str, output_file: str, model: str = "cla
     
     all_modules = []
     for idx, code in enumerate(module_codes, 1):
-        logger.info(f"\nParsing module #{idx}...")
+        logger.info(f"Parsing module #{idx}...")
         result = parse_module_with_llm(code, client, output_dir)
         
         if 'modules' in result and isinstance(result['modules'], list):
@@ -177,14 +177,14 @@ def parse_registration_file(input_file: str, output_file: str, model: str = "cla
         "modules": all_modules
     }
     
-    logger.info(f"\nSaving result to: {output_file}")
+    logger.info(f"Saving result to: {output_file}")
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
     
     logger.success(f"Successfully parsed {len(all_modules)} modules")
     logger.success(f"Result saved to: {output_file}")
     
-    logger.info(f"\n正在生成 Python 接口文件...")
+    logger.info(f"正在生成 Python 接口文件...")
     save_python_stubs(output_data, output_dir)
     
     return output_data

@@ -108,7 +108,10 @@ class PylintCallChecker:
                         except (ValueError, IndexError) as e:
                             continue
             
-            logger.success(f"pylint 检测到 {len(issues)} 个函数调用问题")
+            if len(issues) == 0:
+                logger.success("pylint 检测完成，未发现函数调用问题")
+            else:
+                logger.warning(f"pylint 检测到 {len(issues)} 个函数调用问题")
             self.issues = issues
             return issues
             
@@ -123,13 +126,11 @@ class PylintCallChecker:
             return []
     
     def generate_report(self, output_file: Optional[str] = None):
-        logger.info("=" * 80)
-        logger.info(f"pylint 检测到 {len(self.issues)} 个函数调用问题")
-        logger.info("=" * 80)
-        
-        for issue in self.issues:
-            symbol_info = f" ({issue.symbol})" if issue.symbol else ""
-            logger.info(f"{issue.file}:{issue.line}:{issue.column}: {issue.message}{symbol_info}  [{issue.code}]")
+        if len(self.issues) > 0:
+            logger.info("=" * 80)
+            for issue in self.issues:
+                symbol_info = f" ({issue.symbol})" if issue.symbol else ""
+                logger.error(f"{issue.file}:{issue.line}:{issue.column}: {issue.message}{symbol_info}  [{issue.code}]")
             logger.info("=" * 80)
         
         if output_file:

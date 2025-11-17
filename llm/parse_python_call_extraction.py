@@ -109,7 +109,7 @@ def parse_python_call_file(input_file: str, output_file: str, model: str = "clau
     all_results = []
     
     for idx, code in enumerate(call_codes, 1):
-        logger.info(f"\nParsing call block #{idx}...")
+        logger.info(f"Parsing call block #{idx}...")
         result = parse_call_with_llm(code, client, output_dir)
         
         if "error" not in result:

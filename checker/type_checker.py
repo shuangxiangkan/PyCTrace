@@ -81,7 +81,10 @@ class MypyTypeChecker:
                     except (ValueError, IndexError) as e:
                         continue
             
-            logger.success(f"mypy 检测到 {len(issues)} 个问题")
+            if len(issues) == 0:
+                logger.success("mypy 检测完成，未发现问题")
+            else:
+                logger.warning(f"mypy 检测到 {len(issues)} 个问题")
             self.issues = issues
             return issues
             
@@ -96,12 +99,10 @@ class MypyTypeChecker:
             return []
     
     def generate_report(self, output_file: Optional[str] = None):
-        logger.info("=" * 80)
-        logger.info(f"mypy 检测到 {len(self.issues)} 个问题")
-        logger.info("=" * 80)
-        
-        for issue in self.issues:
-            logger.info(f"{issue.file}:{issue.line}:{issue.column}: {issue.message}  [{issue.code}]")
+        if len(self.issues) > 0:
+            logger.info("=" * 80)
+            for issue in self.issues:
+                logger.error(f"{issue.file}:{issue.line}:{issue.column}: {issue.message}  [{issue.code}]")
             logger.info("=" * 80)
         
         if output_file:

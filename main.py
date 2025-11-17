@@ -1,8 +1,7 @@
 import os
 import sys
 import json
-from pathlib import Path
-from typing import List, Tuple, Dict, Any
+from typing import Dict, Any
 
 from C.py_module_extractor import CCodeParser, format_registration_info_json, format_registration_info_text
 from C.py_call_extractor import PythonCallExtractor, format_call_info_json, format_call_info_text
@@ -12,40 +11,19 @@ from llm.parse_python_call_extraction import parse_python_call_file
 from checker.type_checker import MypyTypeChecker
 from checker.function_call_checker import PylintCallChecker
 from utils.logger import logger
+from utils.file_utils import collect_files
 
 
-def collect_files(folder_path: str) -> Tuple[List[str], List[str]]:
-    python_files = []
-    c_files = []
-    
-    folder = Path(folder_path)
-    if not folder.exists():
-        raise FileNotFoundError(f"文件夹不存在: {folder_path}")
-    
-    if not folder.is_dir():
-        raise NotADirectoryError(f"不是一个有效的文件夹: {folder_path}")
-    
-    for file_path in folder.rglob('*'):
-        if file_path.is_file():
-            suffix = file_path.suffix.lower()
-            if suffix == '.py':
-                python_files.append(str(file_path))
-            elif suffix in ['.c', '.h']:
-                c_files.append(str(file_path))
-    
-    return python_files, c_files
-
-
-def process_python_files(python_files: List[str], output_dir: str) -> Dict[str, Any]:
+def process_python_files(python_files: list[str], output_dir: str) -> Dict[str, Any]:
     if not python_files:
         logger.info("未找到 Python 文件")
         return {}
     
-    logger.info(f"\n找到 {len(python_files)} 个 Python 文件:")
+    logger.info(f"找到 {len(python_files)} 个 Python 文件:")
     for f in python_files:
         logger.info(f"  - {f}")
     
-    logger.info("\n正在生成 Python FASTEN call graph...")
+    logger.info("正在生成 Python FASTEN call graph...")
     
     try:
         wrapper = PyCGWrapper(entry_points=python_files)
@@ -73,16 +51,16 @@ def process_python_files(python_files: List[str], output_dir: str) -> Dict[str, 
         return {}
 
 
-def process_c_files(c_files: List[str], output_dir: str) -> Dict[str, Any]:
+def process_c_files(c_files: list[str], output_dir: str) -> Dict[str, Any]:
     if not c_files:
         logger.info("未找到 C/C++ 文件")
         return {}
     
-    logger.info(f"\n找到 {len(c_files)} 个 C/C++ 文件:")
+    logger.info(f"找到 {len(c_files)} 个 C/C++ 文件:")
     for f in c_files:
         logger.info(f"  - {f}")
     
-    logger.info("\n正在提取 C 代码中的 Python 模块注册信息...")
+    logger.info("正在提取 C 代码中的 Python 模块注册信息...")
     
     try:
         parser = CCodeParser()
@@ -109,12 +87,12 @@ def process_c_files(c_files: List[str], output_dir: str) -> Dict[str, Any]:
         return {}
 
 
-def process_python_calls(c_files: List[str], output_dir: str) -> Dict[str, Any]:
+def process_python_calls(c_files: list[str], output_dir: str) -> Dict[str, Any]:
     if not c_files:
         logger.info("未找到 C/C++ 文件")
         return {}
     
-    logger.info(f"\n正在提取 C 代码中的 Python C API 调用信息...")
+    logger.info(f"正在提取 C 代码中的 Python C API 调用信息...")
     
     try:
         extractor = PythonCallExtractor()
@@ -145,10 +123,10 @@ def check_python_types(output_dir: str) -> Dict[str, Any]:
     py_dir = os.path.join(output_dir, "py")
     
     if not os.path.exists(py_dir):
-        logger.info("\n未找到生成的 Python 接口文件目录 (py/)，跳过类型检查")
+        logger.info("未找到生成的 Python 接口文件目录 (py/)，跳过类型检查")
         return {}
     
-    logger.info(f"\n正在对生成的 Python 接口文件进行类型检查...")
+    logger.info(f"正在对生成的 Python 接口文件进行类型检查...")
     
     try:
         checker = MypyTypeChecker(py_dir)
@@ -188,10 +166,10 @@ def check_function_calls(output_dir: str) -> Dict[str, Any]:
     py_dir = os.path.join(output_dir, "py")
     
     if not os.path.exists(py_dir):
-        logger.info("\n未找到生成的 Python 接口文件目录 (py/)，跳过函数调用检查")
+        logger.info("未找到生成的 Python 接口文件目录 (py/)，跳过函数调用检查")
         return {}
     
-    logger.info(f"\n正在对生成的 Python 接口文件进行函数调用检查...")
+    logger.info(f"正在对生成的 Python 接口文件进行函数调用检查...")
     
     try:
         checker = PylintCallChecker(py_dir)
@@ -249,18 +227,18 @@ def main():
     logger.info("=" * 80)
     logger.info("PyCTrace - Python-C 跨语言函数调用分析工具")
     logger.info("=" * 80)
-    logger.info(f"\n分析目标: {folder_path}")
+    logger.info(f"分析目标: {folder_path}")
     logger.info(f"输出目录: {output_dir}")
     
-    logger.info("\n正在收集文件...")
+    logger.info("正在收集文件...")
     python_files, c_files = collect_files(folder_path)
     
-    logger.info(f"\n统计信息:")
+    logger.info(f"统计信息:")
     logger.info(f"  Python 文件: {len(python_files)} 个")
     logger.info(f"  C/C++ 文件: {len(c_files)} 个")
     
     if not python_files and not c_files:
-        logger.info("\n未找到任何 Python 或 C/C++ 文件")
+        logger.info("未找到任何 Python 或 C/C++ 文件")
         return
     
     if python_files:
@@ -272,7 +250,7 @@ def main():
         process_python_calls(c_files, output_dir)
         
         if c_result and c_result.get('module_chains'):
-            logger.info("\n正在使用 LLM 解析模块注册信息...")
+            logger.info("正在使用 LLM 解析 Python 模块注册信息...")
             try:
                 txt_file = os.path.join(output_dir, "c_python_module_registrations.txt")
                 json_file = os.path.join(output_dir, "c_python_module_registrations_llm.json")
@@ -284,7 +262,7 @@ def main():
                 import traceback
                 traceback.print_exc()
         
-        logger.info("\n正在使用 LLM 解析 Python 调用信息...")
+        logger.info("正在使用 LLM 解析 Python 调用信息...")
         try:
             call_txt_file = os.path.join(output_dir, "c_python_call_extraction.txt")
             call_json_file = os.path.join(output_dir, "c_python_call_extraction_llm.json")
@@ -300,7 +278,7 @@ def main():
     
     check_function_calls(output_dir)
     
-    logger.info("\n" + "=" * 80)
+    logger.info("" + "=" * 80)
     logger.success("分析完成!")
     logger.info("=" * 80)
 
