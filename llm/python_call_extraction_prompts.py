@@ -12,7 +12,7 @@ Convert the C code into equivalent Python code:
 1. Extract Python code strings from PyRun_String, PyRun_SimpleString, etc.
 2. Extract function calls from PyDict_GetItemString, PyObject_CallObject, etc.
 3. Combine them into complete, executable Python code
-4. Resolve dynamic function names (e.g., from snprintf, string concatenation)
+4. Resolve dynamic function names (e.g., from snprintf, string concatenation) - compute their actual values
 
 ## Output Format Requirements
 
@@ -47,6 +47,10 @@ Output:
 ```c
 {code}
 ```
+
+## CRITICAL REQUIREMENT
+
+**PRESERVE EXACT SEMANTICS**: You MUST preserve the exact semantics of the original C code. If the C code calls a non-existent function or contains errors, keep them exactly as-is in your output. DO NOT auto-correct, fix, or modify any errors. Your job is to faithfully translate, not to fix bugs.
 
 Please output the analysis result in JSON format:"""
     
