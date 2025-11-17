@@ -3,6 +3,9 @@ import sys
 import json
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.logger import logger
+
 try:
     from .llm_client import ClaudeClient
     from .module_registration_prompts import (
@@ -29,8 +32,8 @@ def save_prompt_and_response(prompt: str, response: str, output_dir: Path):
     with open(response_file, 'w', encoding='utf-8') as f:
         f.write(response)
     
-    print(f"  Saved prompt to: {prompt_file}")
-    print(f"  Saved response to: {response_file}")
+    logger.info(f"  Saved prompt to: {prompt_file}")
+    logger.info(f"  Saved response to: {response_file}")
 
 
 def clean_json_response(response_text: str) -> str:
@@ -66,14 +69,14 @@ def parse_module_with_llm(code: str, client: ClaudeClient, output_dir: Path = No
         return result
         
     except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
-        print(f"Raw response: {response}")
+        logger.error(f"JSON parsing error: {e}")
+        logger.info(f"Raw response: {response}")
         return {
             "error": "JSON parsing failed",
             "raw_response": response
         }
     except Exception as e:
-        print(f"LLM call error: {e}")
+        logger.error(f"LLM call error: {e}")
         return {
             "error": str(e)
         }
@@ -128,11 +131,11 @@ def save_python_stubs(json_data: dict, output_dir: Path):
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(stub_code)
         
-        print(f"✓ Python 接口文件已生成: {output_file}")
+        logger.success(f"Python 接口文件已生成: {output_file}")
 
 
 def parse_registration_file(input_file: str, output_file: str, model: str = "claude-sonnet-4-20250514"):
-    print(f"Reading file: {input_file}")
+    logger.info(f"Reading file: {input_file}")
     
     with open(input_file, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -161,7 +164,7 @@ def parse_registration_file(input_file: str, output_file: str, model: str = "cla
     
     all_modules = []
     for idx, code in enumerate(module_codes, 1):
-        print(f"\nParsing module #{idx}...")
+        logger.info(f"\nParsing module #{idx}...")
         result = parse_module_with_llm(code, client, output_dir)
         
         if 'modules' in result and isinstance(result['modules'], list):
@@ -174,14 +177,14 @@ def parse_registration_file(input_file: str, output_file: str, model: str = "cla
         "modules": all_modules
     }
     
-    print(f"\nSaving result to: {output_file}")
+    logger.info(f"\nSaving result to: {output_file}")
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
     
-    print(f"✓ Successfully parsed {len(all_modules)} modules")
-    print(f"✓ Result saved to: {output_file}")
+    logger.success(f"Successfully parsed {len(all_modules)} modules")
+    logger.success(f"Result saved to: {output_file}")
     
-    print(f"\n正在生成 Python 接口文件...")
+    logger.info(f"\n正在生成 Python 接口文件...")
     save_python_stubs(output_data, output_dir)
     
     return output_data

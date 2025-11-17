@@ -2,16 +2,16 @@ import sys
 
 class Logger:
     def info(self, message: str):
-        print(f"ℹ️  {message}")
+        print(f"ℹ️  [INFO] {message}")
     
     def success(self, message: str):
-        print(f"✅ {message}")
+        print(f"✅ [SUCCESS] {message}")
     
     def warning(self, message: str):
-        print(f"⚠️  {message}")
+        print(f"⚠️  [WARNING] {message}")
     
     def error(self, message: str):
-        print(f"❌ {message}", file=sys.stderr)
+        print(f"❌ [ERROR] {message}", file=sys.stderr)
 
 
 logger = Logger()

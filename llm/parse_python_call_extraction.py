@@ -2,6 +2,9 @@ import sys
 import json
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.logger import logger
+
 try:
     from .llm_client import ClaudeClient
     from .python_call_extraction_prompts import (
@@ -26,8 +29,8 @@ def save_prompt_and_response(prompt: str, response: str, output_dir: Path):
     with open(response_file, 'w', encoding='utf-8') as f:
         f.write(response)
     
-    print(f"  Saved prompt to: {prompt_file}")
-    print(f"  Saved response to: {response_file}")
+    logger.info(f"  Saved prompt to: {prompt_file}")
+    logger.info(f"  Saved response to: {response_file}")
 
 
 def clean_json_response(response_text: str) -> str:
@@ -63,20 +66,20 @@ def parse_call_with_llm(code: str, client: ClaudeClient, output_dir: Path = None
         return result
         
     except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
-        print(f"Raw response: {response}")
+        logger.error(f"JSON parsing error: {e}")
+        logger.info(f"Raw response: {response}")
         return {
             "error": "JSON parsing failed",
             "raw_response": response
         }
     except Exception as e:
-        print(f"LLM call error: {e}")
+        logger.error(f"LLM call error: {e}")
         return {
             "error": str(e)
         }
 
 def parse_python_call_file(input_file: str, output_file: str, model: str = "claude-sonnet-4-20250514"):
-    print(f"Reading file: {input_file}")
+    logger.info(f"Reading file: {input_file}")
     
     with open(input_file, 'r', encoding='utf-8') as f:
         content = f.read()
@@ -106,7 +109,7 @@ def parse_python_call_file(input_file: str, output_file: str, model: str = "clau
     all_results = []
     
     for idx, code in enumerate(call_codes, 1):
-        print(f"\nParsing call block #{idx}...")
+        logger.info(f"\nParsing call block #{idx}...")
         result = parse_call_with_llm(code, client, output_dir)
         
         if "error" not in result:
@@ -118,7 +121,7 @@ def parse_python_call_file(input_file: str, output_file: str, model: str = "clau
                     "python_code": python_code
                 })
         else:
-            print(f"  Error parsing call block #{idx}: {result.get('error')}")
+            logger.error(f"Error parsing call block #{idx}: {result.get('error')}")
     
     final_result = {
         "total_blocks": len(all_results),
@@ -128,7 +131,7 @@ def parse_python_call_file(input_file: str, output_file: str, model: str = "clau
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(final_result, f, indent=2, ensure_ascii=False)
     
-    print(f"✓ JSON result saved to: {output_file}")
+    logger.success(f"JSON result saved to: {output_file}")
     
     if all_python_code:
         py_output_dir = output_dir / "py"
@@ -138,17 +141,17 @@ def parse_python_call_file(input_file: str, output_file: str, model: str = "clau
         with open(py_output_file, 'w', encoding='utf-8') as f:
             f.write('\n'.join(all_python_code))
         
-        print(f"✓ Python code saved to: {py_output_file}")
+        logger.success(f"Python code saved to: {py_output_file}")
     
-    print(f"\n✓ Successfully parsed {len(call_codes)} call blocks")
-    print(f"✓ Extracted {len(all_python_code)} Python code blocks")
+    logger.success(f"Successfully parsed {len(call_codes)} call blocks")
+    logger.success(f"Extracted {len(all_python_code)} Python code blocks")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python parse_python_call_extraction.py <input_file> [output_file]")
-        print("\nExample:")
-        print("  python parse_python_call_extraction.py output/c_python_call_extraction.txt output/c_python_call_extraction_llm.json")
+        logger.info("Usage: python parse_python_call_extraction.py <input_file> [output_file]")
+        logger.info("\nExample:")
+        logger.info("  python parse_python_call_extraction.py output/c_python_call_extraction.txt output/c_python_call_extraction_llm.json")
         sys.exit(1)
     
     input_file = sys.argv[1]

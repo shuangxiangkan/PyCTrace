@@ -6,6 +6,9 @@ from typing import List, Optional
 from dataclasses import dataclass, asdict
 from pylint.lint import Run
 
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.logger import logger
+
 
 @dataclass
 class CallIssue:
@@ -25,11 +28,11 @@ class PylintCallChecker:
         self.raw_output: str = ""
         
     def check_calls(self) -> List[CallIssue]:
-        print("使用 pylint 进行函数调用检查...")
+        logger.info("使用 pylint 进行函数调用检查...")
         try:
             py_files = [str(f) for f in self.target_dir.rglob('*.py')]
             if not py_files:
-                print("  ⚠ 未找到 Python 文件")
+                logger.warning("未找到 Python 文件")
                 return []
             
             import sys
@@ -105,29 +108,29 @@ class PylintCallChecker:
                         except (ValueError, IndexError) as e:
                             continue
             
-            print(f"  ✓ pylint 检测到 {len(issues)} 个函数调用问题")
+            logger.success(f"pylint 检测到 {len(issues)} 个函数调用问题")
             self.issues = issues
             return issues
             
         except ImportError:
-            print("  ⚠ pylint 未安装")
-            print("    安装命令: pip install pylint")
+            logger.warning("pylint 未安装")
+            logger.info("  安装命令: pip install pylint")
             return []
         except Exception as e:
-            print(f"  ✗ pylint 检查失败: {e}")
+            logger.error(f"pylint 检查失败: {e}")
             import traceback
             traceback.print_exc()
             return []
     
     def generate_report(self, output_file: Optional[str] = None):
-        print("=" * 80)
-        print(f"pylint 检测到 {len(self.issues)} 个函数调用问题")
-        print("=" * 80)
+        logger.info("=" * 80)
+        logger.info(f"pylint 检测到 {len(self.issues)} 个函数调用问题")
+        logger.info("=" * 80)
         
         for issue in self.issues:
             symbol_info = f" ({issue.symbol})" if issue.symbol else ""
-            print(f"{issue.file}:{issue.line}:{issue.column}: {issue.message}{symbol_info}  [{issue.code}]")
-            print("=" * 80)
+            logger.info(f"{issue.file}:{issue.line}:{issue.column}: {issue.message}{symbol_info}  [{issue.code}]")
+            logger.info("=" * 80)
         
         if output_file:
             output_path = Path(output_file)
@@ -143,20 +146,20 @@ class PylintCallChecker:
             
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(report_data, f, indent=2, ensure_ascii=False)
-            print(f"\n💾 完整报告已保存到: {output_path}")
+            logger.success(f"完整报告已保存到: {output_path}")
             
             raw_txt_path = output_path.with_suffix('.txt')
             with open(raw_txt_path, 'w', encoding='utf-8') as f:
                 f.write(self.raw_output)
-            print(f"💾 原始输出已保存到: {raw_txt_path}")
+            logger.success(f"原始输出已保存到: {raw_txt_path}")
 
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python function_call_checker.py <目标目录> [输出JSON文件]")
-        print("\n示例:")
-        print("  python function_call_checker.py /path/to/python/code")
-        print("  python function_call_checker.py /path/to/python/code report.json")
+        logger.info("用法: python function_call_checker.py <目标目录> [输出JSON文件]")
+        logger.info("\n示例:")
+        logger.info("  python function_call_checker.py /path/to/python/code")
+        logger.info("  python function_call_checker.py /path/to/python/code report.json")
         sys.exit(1)
     
     target_dir = sys.argv[1]

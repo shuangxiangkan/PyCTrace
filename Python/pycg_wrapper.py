@@ -6,6 +6,10 @@ PyCG 包装器
 import sys
 import os
 from typing import Dict, Any, List, Optional
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.logger import logger
 
 # 添加 PyCG 到 Python 路径
 PYCG_PATH = os.path.join(os.path.dirname(__file__), 'PyCG')
@@ -356,16 +360,16 @@ if __name__ == "__main__":
     import json
     
     # 示例 1: 生成简单格式的调用图
-    print("示例 1: 生成简单格式的调用图")
-    print("-" * 50)
+    logger.info("示例 1: 生成简单格式的调用图")
+    logger.info("-" * 50)
     
     # 这里需要一个实际的 Python 文件路径
     # cg = generate_call_graph("example.py", format_type='simple')
     # print(json.dumps(cg, indent=2))
     
     # 示例 2: 使用面向对象的接口
-    print("\n示例 2: 使用面向对象的接口")
-    print("-" * 50)
+    logger.info("\n示例 2: 使用面向对象的接口")
+    logger.info("-" * 50)
     
     # wrapper = PyCGWrapper(["example.py"], ".")
     # wrapper.analyze()
@@ -374,6 +378,6 @@ if __name__ == "__main__":
     # print("Simple format:", json.dumps(simple_cg, indent=2))
     # print("FASTEN format:", json.dumps(fasten_cg, indent=2))
     
-    print("PyCG Wrapper 已准备就绪！")
-    print("请参考上面的注释代码来使用此包装器。")
+    logger.success("PyCG Wrapper 已准备就绪！")
+    logger.info("请参考上面的注释代码来使用此包装器。")
 
