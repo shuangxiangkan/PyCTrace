@@ -11,6 +11,7 @@ from llm.parse_module_registration import parse_registration_file
 from llm.parse_python_call_extraction import parse_python_call_file
 from checker.type_checker import MypyTypeChecker
 from checker.function_call_checker import PylintCallChecker
+from utils.logger import logger
 
 
 def collect_files(folder_path: str) -> Tuple[List[str], List[str]]:
@@ -37,14 +38,14 @@ def collect_files(folder_path: str) -> Tuple[List[str], List[str]]:
 
 def process_python_files(python_files: List[str], output_dir: str) -> Dict[str, Any]:
     if not python_files:
-        print("未找到 Python 文件")
+        logger.info("未找到 Python 文件")
         return {}
     
-    print(f"\n找到 {len(python_files)} 个 Python 文件:")
+    logger.info(f"\n找到 {len(python_files)} 个 Python 文件:")
     for f in python_files:
-        print(f"  - {f}")
+        logger.info(f"  - {f}")
     
-    print("\n正在生成 Python FASTEN call graph...")
+    logger.info("\n正在生成 Python FASTEN call graph...")
     
     try:
         wrapper = PyCGWrapper(entry_points=python_files)
@@ -61,12 +62,12 @@ def process_python_files(python_files: List[str], output_dir: str) -> Dict[str, 
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(call_graph, f, indent=2, ensure_ascii=False)
         
-        print(f"✓ Python FASTEN call graph 已保存到: {output_file}")
+        logger.success(f"Python FASTEN call graph 已保存到: {output_file}")
         
         return call_graph
         
     except Exception as e:
-        print(f"✗ 处理 Python 文件时出错: {e}")
+        logger.error(f"处理 Python 文件时出错: {e}")
         import traceback
         traceback.print_exc()
         return {}
@@ -74,14 +75,14 @@ def process_python_files(python_files: List[str], output_dir: str) -> Dict[str, 
 
 def process_c_files(c_files: List[str], output_dir: str) -> Dict[str, Any]:
     if not c_files:
-        print("未找到 C/C++ 文件")
+        logger.info("未找到 C/C++ 文件")
         return {}
     
-    print(f"\n找到 {len(c_files)} 个 C/C++ 文件:")
+    logger.info(f"\n找到 {len(c_files)} 个 C/C++ 文件:")
     for f in c_files:
-        print(f"  - {f}")
+        logger.info(f"  - {f}")
     
-    print("\n正在提取 C 代码中的 Python 模块注册信息...")
+    logger.info("\n正在提取 C 代码中的 Python 模块注册信息...")
     
     try:
         parser = CCodeParser()
@@ -91,18 +92,18 @@ def process_c_files(c_files: List[str], output_dir: str) -> Dict[str, Any]:
         with open(json_output_file, 'w', encoding='utf-8') as f:
             f.write(format_registration_info_json(result))
         
-        print(f"✓ C 模块注册信息（JSON格式，含元数据）已保存到: {json_output_file}")
+        logger.success(f"C 模块注册信息（JSON格式，含元数据）已保存到: {json_output_file}")
         
         txt_output_file = os.path.join(output_dir, "c_python_module_registrations.txt")
         with open(txt_output_file, 'w', encoding='utf-8') as f:
             f.write(format_registration_info_text(result))
         
-        print(f"✓ C 模块注册信息（TXT格式，纯代码）已保存到: {txt_output_file}")
+        logger.success(f"C 模块注册信息（TXT格式，纯代码）已保存到: {txt_output_file}")
         
         return result
         
     except Exception as e:
-        print(f"✗ 处理 C 文件时出错: {e}")
+        logger.error(f"处理 C 文件时出错: {e}")
         import traceback
         traceback.print_exc()
         return {}
@@ -110,10 +111,10 @@ def process_c_files(c_files: List[str], output_dir: str) -> Dict[str, Any]:
 
 def process_python_calls(c_files: List[str], output_dir: str) -> Dict[str, Any]:
     if not c_files:
-        print("未找到 C/C++ 文件")
+        logger.info("未找到 C/C++ 文件")
         return {}
     
-    print(f"\n正在提取 C 代码中的 Python C API 调用信息...")
+    logger.info(f"\n正在提取 C 代码中的 Python C API 调用信息...")
     
     try:
         extractor = PythonCallExtractor()
@@ -123,18 +124,18 @@ def process_python_calls(c_files: List[str], output_dir: str) -> Dict[str, Any]:
         with open(json_output_file, 'w', encoding='utf-8') as f:
             f.write(format_call_info_json(result))
         
-        print(f"✓ Python C API 调用信息（JSON格式）已保存到: {json_output_file}")
+        logger.success(f"Python C API 调用信息（JSON格式）已保存到: {json_output_file}")
         
         txt_output_file = os.path.join(output_dir, "c_python_call_extraction.txt")
         with open(txt_output_file, 'w', encoding='utf-8') as f:
             f.write(format_call_info_text(result))
         
-        print(f"✓ Python C API 调用信息（TXT格式）已保存到: {txt_output_file}")
+        logger.success(f"Python C API 调用信息（TXT格式）已保存到: {txt_output_file}")
         
         return result
         
     except Exception as e:
-        print(f"✗ 提取 Python C API 调用信息时出错: {e}")
+        logger.error(f"提取 Python C API 调用信息时出错: {e}")
         import traceback
         traceback.print_exc()
         return {}
@@ -144,10 +145,10 @@ def check_python_types(output_dir: str) -> Dict[str, Any]:
     py_dir = os.path.join(output_dir, "py")
     
     if not os.path.exists(py_dir):
-        print("\n未找到生成的 Python 接口文件目录 (py/)，跳过类型检查")
+        logger.info("\n未找到生成的 Python 接口文件目录 (py/)，跳过类型检查")
         return {}
     
-    print(f"\n正在对生成的 Python 接口文件进行类型检查...")
+    logger.info(f"\n正在对生成的 Python 接口文件进行类型检查...")
     
     try:
         checker = MypyTypeChecker(py_dir)
@@ -157,9 +158,9 @@ def check_python_types(output_dir: str) -> Dict[str, Any]:
         checker.generate_report(report_file)
         
         if len(issues) == 0:
-            print("✓ 类型检查通过，未发现问题")
+            logger.success("类型检查通过，未发现问题")
         else:
-            print(f"⚠ 类型检查发现 {len(issues)} 个问题，详情请查看报告文件")
+            logger.warning(f"类型检查发现 {len(issues)} 个问题，详情请查看报告文件")
         
         return {
             "total_issues": len(issues),
@@ -177,7 +178,7 @@ def check_python_types(output_dir: str) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"✗ 类型检查时出错: {e}")
+        logger.error(f"类型检查时出错: {e}")
         import traceback
         traceback.print_exc()
         return {}
@@ -187,10 +188,10 @@ def check_function_calls(output_dir: str) -> Dict[str, Any]:
     py_dir = os.path.join(output_dir, "py")
     
     if not os.path.exists(py_dir):
-        print("\n未找到生成的 Python 接口文件目录 (py/)，跳过函数调用检查")
+        logger.info("\n未找到生成的 Python 接口文件目录 (py/)，跳过函数调用检查")
         return {}
     
-    print(f"\n正在对生成的 Python 接口文件进行函数调用检查...")
+    logger.info(f"\n正在对生成的 Python 接口文件进行函数调用检查...")
     
     try:
         checker = PylintCallChecker(py_dir)
@@ -200,9 +201,9 @@ def check_function_calls(output_dir: str) -> Dict[str, Any]:
         checker.generate_report(json_report_file)
         
         if len(issues) == 0:
-            print("✓ 函数调用检查通过，未发现问题")
+            logger.success("函数调用检查通过，未发现问题")
         else:
-            print(f"⚠ 函数调用检查发现 {len(issues)} 个问题，详情请查看报告文件")
+            logger.warning(f"函数调用检查发现 {len(issues)} 个问题，详情请查看报告文件")
         
         return {
             "total_issues": len(issues),
@@ -221,7 +222,7 @@ def check_function_calls(output_dir: str) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        print(f"✗ 函数调用检查时出错: {e}")
+        logger.error(f"函数调用检查时出错: {e}")
         import traceback
         traceback.print_exc()
         return {}
@@ -229,10 +230,10 @@ def check_function_calls(output_dir: str) -> Dict[str, Any]:
 
 def main():
     if len(sys.argv) < 2:
-        print("用法: python main.py <文件夹路径> [输出目录]")
-        print("\n示例:")
-        print("  python main.py /path/to/code")
-        print("  python main.py /path/to/code /path/to/output")
+        logger.info("用法: python main.py <文件夹路径> [输出目录]")
+        logger.info("\n示例:")
+        logger.info("  python main.py /path/to/code")
+        logger.info("  python main.py /path/to/code /path/to/output")
         sys.exit(1)
     
     folder_path = sys.argv[1]
@@ -245,21 +246,21 @@ def main():
     
     os.makedirs(output_dir, exist_ok=True)
     
-    print("=" * 80)
-    print("PyCTrace - Python-C 跨语言函数调用分析工具")
-    print("=" * 80)
-    print(f"\n分析目标: {folder_path}")
-    print(f"输出目录: {output_dir}")
+    logger.info("=" * 80)
+    logger.info("PyCTrace - Python-C 跨语言函数调用分析工具")
+    logger.info("=" * 80)
+    logger.info(f"\n分析目标: {folder_path}")
+    logger.info(f"输出目录: {output_dir}")
     
-    print("\n正在收集文件...")
+    logger.info("\n正在收集文件...")
     python_files, c_files = collect_files(folder_path)
     
-    print(f"\n统计信息:")
-    print(f"  Python 文件: {len(python_files)} 个")
-    print(f"  C/C++ 文件: {len(c_files)} 个")
+    logger.info(f"\n统计信息:")
+    logger.info(f"  Python 文件: {len(python_files)} 个")
+    logger.info(f"  C/C++ 文件: {len(c_files)} 个")
     
     if not python_files and not c_files:
-        print("\n未找到任何 Python 或 C/C++ 文件")
+        logger.info("\n未找到任何 Python 或 C/C++ 文件")
         return
     
     if python_files:
@@ -271,7 +272,7 @@ def main():
         process_python_calls(c_files, output_dir)
         
         if c_result and c_result.get('module_chains'):
-            print("\n正在使用 LLM 解析模块注册信息...")
+            logger.info("\n正在使用 LLM 解析模块注册信息...")
             try:
                 txt_file = os.path.join(output_dir, "c_python_module_registrations.txt")
                 json_file = os.path.join(output_dir, "c_python_module_registrations_llm.json")
@@ -279,11 +280,11 @@ def main():
                 parse_registration_file(txt_file, json_file)
                 
             except Exception as e:
-                print(f"✗ LLM 解析出错: {e}")
+                logger.error(f"LLM 解析出错: {e}")
                 import traceback
                 traceback.print_exc()
         
-        print("\n正在使用 LLM 解析 Python 调用信息...")
+        logger.info("\n正在使用 LLM 解析 Python 调用信息...")
         try:
             call_txt_file = os.path.join(output_dir, "c_python_call_extraction.txt")
             call_json_file = os.path.join(output_dir, "c_python_call_extraction_llm.json")
@@ -291,7 +292,7 @@ def main():
             parse_python_call_file(call_txt_file, call_json_file)
             
         except Exception as e:
-            print(f"✗ LLM 解析 Python 调用出错: {e}")
+            logger.error(f"LLM 解析 Python 调用出错: {e}")
             import traceback
             traceback.print_exc()
     
@@ -299,9 +300,9 @@ def main():
     
     check_function_calls(output_dir)
     
-    print("\n" + "=" * 80)
-    print("分析完成!")
-    print("=" * 80)
+    logger.info("\n" + "=" * 80)
+    logger.success("分析完成!")
+    logger.info("=" * 80)
 
 
 if __name__ == "__main__":
