@@ -1,139 +1,157 @@
 # PyCTrace
 
-PyCTrace 是一个用于分析 C 代码中嵌入的 Python 代码的工具，能够提取 Python 代码片段并生成函数调用图。
+PyCTrace 是一个用于分析 Python-C 混合代码的静态分析工具，能够从 C 扩展代码中提取 Python 接口、嵌入的 Python 代码，并检测潜在的运行时错误。
 
-## 功能特性
+## 快速开始
 
-- 🔍 **C 代码解析**: 使用 Tree-sitter 解析 C 代码，提取其中的 Python 字符串
-- 🐍 **Python 代码分析**: 解析提取的 Python 代码，识别函数定义和调用关系
-- 📊 **调用图生成**: 生成多种格式的调用图可视化
-  - DOT 格式 (Graphviz)
-  - PDF 格式 (可直接查看)
-  - Mermaid 格式 (支持在线渲染)
-  - 文本格式 (简单易读)
+### 1. 创建虚拟环境并安装依赖
 
-## 安装要求
-
-### Python 依赖
 ```bash
+# 创建虚拟环境
+python3 -m venv venv
+
+# 激活虚拟环境
+source venv/bin/activate  # Linux/macOS
+# 或
+venv\Scripts\activate     # Windows
+
+# 安装依赖
 pip install -r requirements.txt
 ```
 
-## 使用方法
+### 2. 配置 API Key
 
-### 基本用法
+创建 `.env` 文件：
+
 ```bash
-python main.py <目录路径>
+ANTHROPIC_API_KEY=your_api_key_here
 ```
 
-### 详细输出
+### 3. 运行分析
+
 ```bash
-python main.py <目录路径> -v
+python main.py example
 ```
 
-### 高级选项
+### 4. 查看结果
 
-#### 只生成Python相关的C调用图
+分析完成后，输出目录 `example_output/` 包含以下内容：
+
+#### 📄 C 模块接口提取
+- **`py/host.py`** - 自动生成的 Python 接口声明：
+  ```python
+  def tick(arg0: int) -> None:
+      pass
+  ```
+
+#### 🐍 嵌入的 Python 代码提取
+- **`py/python_call_in_c.py`** - 从 C 代码中提取的 Python 代码：
+  ```python
+  import host
+  def add_v2(a,b,k):
+      print('P')
+      host.tick(k)
+      return a+b
+  def metrics_probe(): return 0
+  
+  add_v1(10, 20, 3)  # ⚠️ NameError: add_v1 未定义
+  ```
+
+#### 🔍 静态检查报告
+- **`type_check_report.txt`** - Mypy 类型检查：
+  ```
+  python_call_in_c.py:9:1: error: Name "add_v1" is not defined
+  ```
+- **`call_check_report.txt`** - Pylint 调用检查：
+  ```
+  python_call_in_c.py:9:0: E0602: Undefined variable 'add_v1'
+  ```
+
+#### 📊 结构化分析数据
+- **`c_python_module_registrations_llm.json`** - 模块注册信息
+- **`c_python_call_extraction_llm.json`** - Python 调用提取
+- **`type_check_report.json`** / **`call_check_report.json`** - 机器可读的检查报告
+
+---
+
+## 原理说明
+
+PyCTrace 通过 **四步流程** 实现 Python-C 混合代码的静态分析：
+
+### 1️⃣ C 代码解析（Tree-sitter）
+使用 Tree-sitter 解析 C 源码，定位两类关键信息：
+- **模块注册** - `PyModule_Create`、`PyMethodDef` 等模块定义代码
+- **Python 调用** - `PyRun_String`、`PyObject_CallObject` 等 Python C API 调用
+
+### 2️⃣ LLM 辅助提取（Claude API）
+将提取的 C 代码片段发送给 Claude，结构化解析：
+- **函数签名** - 从 `PyArg_ParseTuple` 的格式字符串推断参数类型
+- **Python 代码** - 提取字符串常量中的 Python 代码并补全上下文
+
+### 3️⃣ Python 接口生成
+根据 C 模块定义自动生成 Python stub 文件：
+- 参数类型标注（`l` → `int`, `s` → `str`）
+- 返回类型推断（`Py_RETURN_NONE` → `None`）
+
+### 4️⃣ 静态分析检查
+对生成的 Python 代码执行：
+- **Mypy** 类型检查 - 检测类型错误、未定义变量
+- **Pylint** 调用检查 - 检测函数调用错误、参数不匹配
+
+### 示例分析
+
+对于 C 代码：
+```c
+const char *py = "import host\n"
+                 "def add_v2(a,b,k):\n"
+                 "    host.tick(k)\n"
+                 "    return a+b\n";
+PyRun_String(py, Py_file_input, g, g);
+
+snprintf(fname, 32, "add_%s", choose_suffix());  // -> "add_v1"
+PyObject *fn = PyDict_GetItemString(g, fname);   // 查找 add_v1
+PyObject_CallObject(fn, args);                    // 调用 add_v1
+```
+
+PyCTrace 能够：
+1. ✅ 提取 `host` 模块的 `tick` 函数定义
+2. ✅ 提取嵌入的 `add_v2` 函数代码
+3. ✅ 推断出运行时会调用 `add_v1(10, 20, 3)`
+4. ⚠️ **检测到错误**：`add_v1` 未定义（实际定义的是 `add_v2`）
+
+这类错误在编译期无法发现，但会导致运行时 `NameError`。
+
+---
+
+## 命令行选项
+
 ```bash
-python main.py <目录路径> --python-only
+python main.py <目录路径> [输出目录]
 ```
-只包含与Python交互相关的C函数，过滤掉纯C函数调用，使Python-C交互更清晰。
 
-#### 生成合并的Python-C调用图
+**示例**：
 ```bash
-python main.py <目录路径> --merge
-```
-合并C代码中的Python相关调用图和Python代码的调用图，展示完整的Python-C交互关系。
+# 使用默认输出目录 (example_output/)
+python main.py example
 
-### 示例
-```bash
-# 分析单个目录
-python main.py /path/to/c_code_directory
-
-# 分析并显示详细信息
-python main.py /path/to/c_code_directory -v
-
-# 只生成Python相关的调用图
-python main.py /path/to/c_code_directory --python-only -v
-
-# 生成合并的Python-C调用图
-python main.py /path/to/c_code_directory --merge -v
+# 指定输出目录
+python main.py example my_output
 ```
 
-## 输出文件
-
-程序会在 `output/` 目录下生成以下文件：
-
-### Python 分析结果
-- `python_fasten_callgraph.json` - Python FASTEN 格式调用图
-
-### C 模块注册信息
-- `c_python_module_registrations.json` - C 模块注册信息（JSON 格式，含元数据）
-- `c_python_module_registrations.txt` - C 模块注册信息（TXT 格式，纯代码）
-
-### LLM 解析结果
-- `c_python_module_registrations_llm.json` - LLM 解析后的结构化模块信息
-- `module_registration_prompt.txt` - 发送给 LLM 的 prompt
-- `module_registration_response.txt` - LLM 的原始响应
-
-### Python C API 调用分析
-- `c_python_call_extraction_llm.json` - LLM 解析后的 Python 代码（结构化）
-- `python_call_prompt.txt` - Python 调用提取 Prompt
-- `python_call_response.txt` - Python 调用提取 Response
-
-### Python 接口文件
-- `py/` - 自动生成的 Python 文件目录
-  - `<module_name>.py` - 根据 C 扩展模块生成的 Python 函数声明
-  - `python_call_in_c.py` - 从 C 代码提取的完整 Python 代码
-
-文件说明：
-- FASTEN 格式：标准化的软件依赖分析格式
-- LLM 解析：使用 Claude 自动提取模块名、函数映射、参数类型等信息
-- Python 接口：从 C 扩展自动生成的 Python 函数签名，可用于类型提示和测试
-- Python 代码提取：将 C 代码中嵌入的 Python 代码转换为可执行的 Python 文件
-
-## 项目结构
-
-```
-PyCTrace/
-├── C/                                   # C 代码解析模块
-│   └── py_module_extractor.py          # C 模块注册信息提取器
-├── Python/                              # Python 代码解析模块
-│   └── pycg_wrapper.py                  # PyCG 包装器（FASTEN 调用图生成）
-├── llm/                                 # LLM 解析模块
-│   ├── __init__.py                      # 包初始化
-│   ├── llm_client.py                    # Claude API 客户端
-│   ├── module_registration_prompts.py   # 模块注册 prompt 模板
-│   ├── module_registration_schema.py    # 输出格式定义
-│   ├── parse_module_registration.py     # LLM 解析器
-│   └── README.md                        # LLM 模块文档
-├── Utils/                               # 工具模块
-│   └── c2python.py                      # JSON 转 Python 接口生成器
-├── output/                              # 输出目录
-│   └── py/                              # 生成的 Python 接口文件
-├── main.py                              # 主程序入口
-├── requirements.txt                     # Python 依赖
-└── README.md                            # 项目说明
-```
+---
 
 ## 依赖说明
 
-- **tree-sitter**: 代码解析引擎
-- **pycg**: Python 调用图生成器
-- **anthropic**: Claude API 客户端
-- **python-dotenv**: 环境变量管理
+| 依赖 | 用途 |
+|------|------|
+| `tree-sitter` | C/Python 代码解析 |
+| `anthropic` | Claude API 调用 |
+| `mypy` | Python 类型检查 |
+| `pylint` | Python 代码质量检查 |
+| `networkx` | 调用图生成 |
 
-## 环境配置
-
-需要在项目根目录创建 `.env` 文件来配置 Claude API Key：
-
-```bash
-# 二选一即可
-ANTHROPIC_API_KEY=your_api_key_here
-# 或
-CLAUDE_API_KEY=your_api_key_here
-```
+---
 
 ## 许可证
 
-本项目采用 MIT 许可证。
+MIT License
