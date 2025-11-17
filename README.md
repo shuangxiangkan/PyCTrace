@@ -1,6 +1,6 @@
 # PyCTrace
 
-PyCTrace 是一个用于分析 Python-C 混合代码的静态分析工具，能够从 C 扩展代码中提取 Python 接口、嵌入的 Python 代码，并检测潜在的运行时错误。
+PyCTrace 是一个用于大模型辅助的，分析 Python-C 混合代码的静态分析工具。它将 C 代码中的 Python 模块注册和 API 调用逻辑用大模型翻译成等价的 Python 代码，通过静态检查发现 Python-C 交互中的潜在错误。
 
 ## 快速开始
 
@@ -8,12 +8,12 @@ PyCTrace 是一个用于分析 Python-C 混合代码的静态分析工具，能�
 
 ```bash
 # 创建虚拟环境
-python3 -m venv venv
+python3 -m venv .venv
 
 # 激活虚拟环境
-source venv/bin/activate  # Linux/macOS
+source .venv/bin/activate  # Linux/macOS
 # 或
-venv\Scripts\activate     # Windows
+.venv\Scripts\activate     # Windows
 
 # 安装依赖
 pip install -r requirements.txt
@@ -27,15 +27,15 @@ pip install -r requirements.txt
 ANTHROPIC_API_KEY=your_api_key_here
 ```
 
-### 3. 运行分析
+### 3. 运行分析，以PyCTrace的example为例
 
 ```bash
-python main.py example
+python main.py /path-to-PyCTrace/example
 ```
 
 ### 4. 查看结果
 
-分析完成后，输出目录 `example_output/` 包含以下内容：
+分析完成后，输出目录默认是最有一个文件夹名称+output, 比如 `example_output/` 包含以下内容：
 
 #### 📄 C 模块接口提取
 - **`py/host.py`** - 自动生成的 Python 接口声明：
@@ -67,36 +67,126 @@ python main.py example
   python_call_in_c.py:9:0: E0602: Undefined variable 'add_v1'
   ```
 
-#### 📊 结构化分析数据
-- **`c_python_module_registrations_llm.json`** - 模块注册信息
-- **`c_python_call_extraction_llm.json`** - Python 调用提取
-- **`type_check_report.json`** / **`call_check_report.json`** - 机器可读的检查报告
+---
+
+## 输出文件详解
+
+### 📁 目录结构
+```
+example_output/
+├── py/                                    # 生成的 Python 代码（独立文件）
+│   ├── host.py                            # C 扩展模块接口
+│   └── python_call_in_c.py                # C 中调用的 Python 代码
+├── all_py/                                # 合并后的 Python 代码（用于检查）
+│   ├── host.py                            # 同 py/host.py
+│   └── python_call_in_c.py                # 同 py/python_call_in_c.py
+├── c_python_module_registrations.*        # C 模块注册分析
+├── c_python_call_extraction.*             # Python 调用提取
+├── type_check_report.*                    # 类型检查报告
+├── call_check_report.*                    # 调用检查报告
+└── *_prompt.txt / *_response.txt          # LLM 交互记录
+```
+
+### 📋 文件说明
+
+#### 1. C 模块注册分析（Module Registration）
+| 文件 | 格式 | 内容 |
+|------|------|------|
+| `c_python_module_registrations.txt` | 文本 | C 模块注册的原始代码片段（`PyMethodDef`、`PyModuleDef` 等） |
+| `c_python_module_registrations.json` | JSON | 模块注册代码 + 元数据（文件路径、行号） |
+| `c_python_module_registrations_llm.json` | JSON | LLM 解析后的结构化信息（模块名、函数签名、参数类型） |
+
+**示例**：`c_python_module_registrations_llm.json`
+```json
+{
+  "modules": [{
+    "module_name": "host",
+    "functions": [{
+      "python_name": "tick",
+      "c_function_name": "py_tick",
+      "param_format": "l",
+      "param_types": ["long"],
+      "return_type": "None"
+    }]
+  }]
+}
+```
+
+#### 2. Python 调用提取（Call Extraction）
+| 文件 | 格式 | 内容 |
+|------|------|------|
+| `c_python_call_extraction.txt` | 文本 | C 中 Python API 调用的代码片段（`PyRun_String`、`PyObject_CallObject` 等） |
+| `c_python_call_extraction.json` | JSON | 调用代码 + 元数据 |
+| `c_python_call_extraction_llm.json` | JSON | LLM 翻译后的等价 Python 代码 |
+
+**关键**：LLM 会推断 C 代码的执行逻辑，例如：
+- `snprintf(fname, 32, "add_%s", choose_suffix())` → 推断出 `fname = "add_v1"`
+- `PyDict_GetItemString(g, fname)` → 翻译为 `add_v1` 函数查找
+- `Py_BuildValue("(iii)", 10, 20, 3)` → 翻译为参数 `(10, 20, 3)`
+
+#### 3. 生成的 Python 代码
+| 目录/文件 | 作用 |
+|-----------|------|
+| `py/host.py` | C 扩展模块 `host` 的 Python stub，包含函数签名和类型标注 |
+| `py/python_call_in_c.py` | 从 C 字符串中提取的 Python 代码 + LLM 翻译的调用逻辑 |
+| `all_py/` | 将 `py/` 中的所有文件合并到同一目录，供 mypy/pylint 分析 |
+
+**为什么需要两个目录？**
+- `py/`：独立文件，便于查看和理解
+- `all_py/`：所有文件在同一目录下，模拟运行时的 import 环境，确保 `import host` 能正确解析
+
+#### 4. 静态检查报告
+| 文件 | 工具 | 检测内容 |
+|------|------|----------|
+| `type_check_report.txt/json` | Mypy | 类型错误、未定义变量、导入错误 |
+| `call_check_report.txt/json` | Pylint | 函数调用错误、参数不匹配、代码质量问题 |
+
+#### 5. LLM 交互记录（调试用）
+| 文件 | 内容 |
+|------|------|
+| `module_registration_prompt.txt` | 发送给 LLM 的模块注册分析 prompt |
+| `module_registration_response.txt` | LLM 返回的原始 JSON |
+| `python_call_prompt.txt` | 发送给 LLM 的 Python 调用翻译 prompt |
+| `python_call_response.txt` | LLM 返回的翻译结果 |
 
 ---
 
 ## 原理说明
 
-PyCTrace 通过 **四步流程** 实现 Python-C 混合代码的静态分析：
+PyCTrace 通过 **四步流程** 将 C 代码中的 Python 交互逻辑翻译为纯 Python 代码，实现静态分析：
 
 ### 1️⃣ C 代码解析（Tree-sitter）
-使用 Tree-sitter 解析 C 源码，定位两类关键信息：
-- **模块注册** - `PyModule_Create`、`PyMethodDef` 等模块定义代码
-- **Python 调用** - `PyRun_String`、`PyObject_CallObject` 等 Python C API 调用
+使用 Tree-sitter 解析 C 源码，提取两类代码片段：
+- **模块注册** - `PyMethodDef`、`PyModuleDef`、`PyModule_Create` 等
+- **Python 调用** - `PyRun_String`、`PyObject_CallObject`、`PyDict_GetItemString` 等
 
-### 2️⃣ LLM 辅助提取（Claude API）
-将提取的 C 代码片段发送给 Claude，结构化解析：
-- **函数签名** - 从 `PyArg_ParseTuple` 的格式字符串推断参数类型
-- **Python 代码** - 提取字符串常量中的 Python 代码并补全上下文
+### 2️⃣ LLM 翻译（Claude API）
+将 C 代码片段发送给 Claude，执行两项翻译任务：
 
-### 3️⃣ Python 接口生成
-根据 C 模块定义自动生成 Python stub 文件：
-- 参数类型标注（`l` → `int`, `s` → `str`）
-- 返回类型推断（`Py_RETURN_NONE` → `None`）
+**任务 1：解析模块注册**
+- 从 `PyMethodDef` 提取函数名映射（`"tick"` → `py_tick`）
+- 从 `PyArg_ParseTuple` 格式字符串推断参数类型（`"l"` → `int`）
+- 生成 Python stub：`def tick(arg0: int) -> None: pass`
 
-### 4️⃣ 静态分析检查
-对生成的 Python 代码执行：
-- **Mypy** 类型检查 - 检测类型错误、未定义变量
-- **Pylint** 调用检查 - 检测函数调用错误、参数不匹配
+**任务 2：翻译 Python 调用逻辑**
+- 提取 `PyRun_String` 中的 Python 代码字符串
+- 推断 `PyObject_CallObject` 的调用逻辑：
+  - 跟踪 C 变量（如 `snprintf` 生成的 `fname`）
+  - 分析 `PyDict_GetItemString` 查找的函数名
+  - 解析 `Py_BuildValue` 构造的参数
+- 生成等价的 Python 调用：`add_v1(10, 20, 3)`
+
+### 3️⃣ Python 代码合并
+将两部分代码放在同一目录下：
+- C 扩展模块的 stub（`host.py`）
+- 翻译后的 Python 调用代码（`python_call_in_c.py`）
+
+模拟真实运行时环境，使 `import host` 能够正确解析。
+
+### 4️⃣ 静态检查
+对生成的 Python 代码执行标准工具检查：
+- **Mypy** - 类型检查、未定义变量检测
+- **Pylint** - 函数调用检查、参数匹配验证
 
 ### 示例分析
 
