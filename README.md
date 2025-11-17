@@ -71,160 +71,58 @@ python main.py /path-to-PyCTrace/example
 
 ## 输出文件详解
 
-以 `example/DynamicNameError_False.c` 为例，分析后生成的 `example_output/` 目录包含：
-
 ### 📁 目录结构
 ```
 example_output/
-├── py/                                         # 生成的 Python 代码（独立文件）
-│   ├── host.py                                 # C 扩展模块接口
-│   └── python_call_in_c.py                     # C 中调用的 Python 代码
-├── all_py/                                     # 合并后的 Python 代码（用于检查）
-│   ├── host.py                                 # 同 py/host.py
-│   └── python_call_in_c.py                     # 同 py/python_call_in_c.py
-├── c_python_module_registrations.txt           # 模块注册代码（纯文本）
-├── c_python_module_registrations.json          # 模块注册代码（含元数据）
-├── c_python_module_registrations_llm.json      # 模块注册信息（结构化）
-├── c_python_call_extraction.txt                # Python调用代码（纯文本）
-├── c_python_call_extraction.json               # Python调用代码（含元数据）
-├── c_python_call_extraction_llm.json           # Python调用代码（翻译后）
-├── type_check_report.txt / .json               # Mypy类型检查报告
-├── call_check_report.txt / .json               # Pylint调用检查报告
-├── module_registration_prompt.txt              # LLM Prompt（模块注册）
-├── module_registration_response.txt            # LLM Response（模块注册）
-├── python_call_prompt.txt                      # LLM Prompt（Python调用）
-└── python_call_response.txt                    # LLM Response（Python调用）
+├── py/                                    # 生成的 Python 代码（独立文件）
+│   ├── host.py                            # C 扩展模块接口
+│   └── python_call_in_c.py                # C 中调用的 Python 代码
+├── all_py/                                # 合并后的 Python 代码（用于检查）
+│   ├── host.py                            # 同 py/host.py
+│   └── python_call_in_c.py                # 同 py/python_call_in_c.py
+├── c_python_module_registrations.*        # C 模块注册分析
+├── c_python_call_extraction.*             # Python 调用提取
+├── type_check_report.*                    # 类型检查报告
+├── call_check_report.*                    # 调用检查报告
+└── *_prompt.txt / *_response.txt          # LLM 交互记录
 ```
 
 ### 📋 文件说明
 
 #### 1. C 模块注册分析（Module Registration）
-
-分析 C 代码中的 Python 模块注册信息，提取模块名、函数映射、参数类型等。
-
-**源代码**（`example/DynamicNameError_False.c`）：
-```c
-static PyObject *py_tick(PyObject *s, PyObject *a) {
-  long k = 0;
-  if (!PyArg_ParseTuple(a, "l", &k))  // 参数格式: "l" = long
-    return NULL;
-  g_counter += (unsigned long)k;
-  Py_RETURN_NONE;                      // 返回类型: None
-}
-static PyMethodDef HostMethods[] = {
-  {"tick", py_tick, METH_VARARGS, ""},  // Python名: tick, C函数: py_tick
-  {NULL, NULL, 0, NULL}
-};
-static struct PyModuleDef HostModule = {
-  PyModuleDef_HEAD_INIT, "host", NULL, -1, HostMethods  // 模块名: host
-};
-PyMODINIT_FUNC PyInit_host(void) {
-  return PyModule_Create(&HostModule);
-}
-```
-
 | 文件 | 格式 | 内容 |
 |------|------|------|
-| `c_python_module_registrations.txt` | 文本 | 提取的模块注册代码片段（方便人工审查） |
-| `c_python_module_registrations.json` | JSON | 代码片段 + 元数据（文件路径、行号、字节位置） |
-| `c_python_module_registrations_llm.json` | JSON | **LLM 解析后的结构化信息**（重点） |
+| `c_python_module_registrations.txt` | 文本 | C 模块注册的原始代码片段（`PyMethodDef`、`PyModuleDef` 等） |
+| `c_python_module_registrations.json` | JSON | 模块注册代码 + 元数据（文件路径、行号） |
+| `c_python_module_registrations_llm.json` | JSON | LLM 解析后的结构化信息（模块名、函数签名、参数类型） |
 
-**`c_python_module_registrations_llm.json`**（LLM 输出）：
+**示例**：`c_python_module_registrations_llm.json`
 ```json
 {
-  "total_modules": 1,
   "modules": [{
-    "module_name": "host",                    // 从 PyModuleDef 提取
+    "module_name": "host",
     "functions": [{
-      "python_name": "tick",                  // 从 PyMethodDef 提取
-      "c_function_name": "py_tick",           // 对应的 C 函数
-      "param_format": "l",                    // PyArg_ParseTuple 格式字符串
-      "param_types": ["long"],                // 推断的参数类型
-      "param_count": 1,
-      "return_type": "None"                   // 从 Py_RETURN_NONE 推断
+      "python_name": "tick",
+      "c_function_name": "py_tick",
+      "param_format": "l",
+      "param_types": ["long"],
+      "return_type": "None"
     }]
   }]
 }
 ```
 
-**生成的 Python stub**（`py/host.py`）：
-```python
-def tick(arg0: int) -> None:  # long → int, Py_RETURN_NONE → None
-    pass
-```
-
 #### 2. Python 调用提取（Call Extraction）
-
-基于 DDG 程序切片，提取与 Python API 调用相关的代码，翻译为等价的 Python 代码。
-
-**源代码**（`example/DynamicNameError_False.c` 的 `main` 函数）：
-```c
-PyObject *g = PyModule_GetDict(PyImport_AddModule("__main__"));
-const char *py = "import host\n"
-                 "def add_v2(a,b,k):\n"
-                 "    print('P')\n"
-                 "    host.tick(k)\n"
-                 "    return a+b\n"
-                 "def metrics_probe(): return 0\n";
-PyRun_String(py, Py_file_input, g, g);  // 执行 Python 代码
-
-char fname[32];
-snprintf(fname, sizeof(fname), "add_%s", choose_suffix());  // fname = "add_v1"
-PyObject *fn = PyDict_GetItemString(g, fname);   // 查找函数 add_v1
-PyObject *args = Py_BuildValue("(iii)", 10, 20, 3);  // 构造参数
-PyObject *ret = PyObject_CallObject(fn, args);   // 调用 add_v1(10, 20, 3)
-```
-
 | 文件 | 格式 | 内容 |
 |------|------|------|
-| `c_python_call_extraction.txt` | 文本 | **程序切片结果**（只包含相关语句） |
-| `c_python_call_extraction.json` | JSON | 切片 + 元数据（含 def/use 信息） |
-| `c_python_call_extraction_llm.json` | JSON | **LLM 翻译后的 Python 代码**（重点） |
+| `c_python_call_extraction.txt` | 文本 | C 中 Python API 调用的代码片段（`PyRun_String`、`PyObject_CallObject` 等） |
+| `c_python_call_extraction.json` | JSON | 调用代码 + 元数据 |
+| `c_python_call_extraction_llm.json` | JSON | LLM 翻译后的等价 Python 代码 |
 
-**`c_python_call_extraction.txt`**（程序切片）：
-```c
-PyObject *g = PyModule_GetDict(PyImport_AddModule("__main__"));
-const char *py = "import host\n"...;
-PyRun_String(py, Py_file_input, g, g);
-char fname[32];
-snprintf(fname, sizeof(fname), "add_%s", choose_suffix());  // 追踪到 fname
-PyObject *fn = PyDict_GetItemString(g, fname);              // 追踪到 fn
-PyObject *args = Py_BuildValue("(iii)", 10, 20, 3);         // 追踪到 args
-PyObject *ret = PyObject_CallObject(fn, args);              // 目标调用
-
-static const char *choose_suffix() { return "v1"; }         // 跨函数追踪
-```
-
-**关键：LLM 推断逻辑**
-1. 识别 `choose_suffix()` 返回 `"v1"`
-2. 计算 `snprintf` 结果：`fname = "add_v1"`
-3. 推断 `PyDict_GetItemString(g, "add_v1")` 查找名为 `add_v1` 的函数
-4. 解析 `Py_BuildValue("(iii)", 10, 20, 3)` 为参数元组 `(10, 20, 3)`
-5. 翻译为 Python 调用：`add_v1(10, 20, 3)`
-
-**`c_python_call_extraction_llm.json`**（LLM 输出）：
-```json
-{
-  "total_blocks": 1,
-  "blocks": [{
-    "block_id": 1,
-    "python_code": "import host\ndef add_v2(a,b,k):\n    print('P')\n    host.tick(k)\n    return a+b\ndef metrics_probe(): return 0\n\nadd_v1(10, 20, 3)"
-  }]
-}
-```
-
-**生成的 Python 代码**（`py/python_call_in_c.py`）：
-```python
-# Block 1
-import host
-def add_v2(a,b,k):
-    print('P')
-    host.tick(k)
-    return a+b
-def metrics_probe(): return 0
-
-add_v1(10, 20, 3)  # ⚠️ 错误：定义的是 add_v2，调用的是 add_v1
-```
+**关键**：LLM 会推断 C 代码的执行逻辑，例如：
+- `snprintf(fname, 32, "add_%s", choose_suffix())` → 推断出 `fname = "add_v1"`
+- `PyDict_GetItemString(g, fname)` → 翻译为 `add_v1` 函数查找
+- `Py_BuildValue("(iii)", 10, 20, 3)` → 翻译为参数 `(10, 20, 3)`
 
 #### 3. 生成的 Python 代码
 | 目录/文件 | 作用 |
@@ -235,70 +133,21 @@ add_v1(10, 20, 3)  # ⚠️ 错误：定义的是 add_v2，调用的是 add_v1
 
 **为什么需要两个目录？**
 - `py/`：独立文件，便于查看和理解
-- `all_py/`：模拟运行时环境，所有文件在同一目录，确保 `import host` 能正确解析
+- `all_py/`：所有文件在同一目录下，模拟运行时的 import 环境，确保 `import host` 能正确解析
 
 #### 4. 静态检查报告
-
-对 `all_py/` 目录执行静态检查，发现 Python-C 交互错误。
-
-**`type_check_report.txt`**（Mypy 输出）：
-```
-example_output/all_py/python_call_in_c.py:9:1: error: Name "add_v1" is not defined  [name-defined]
-Found 1 error in 1 file (checked 2 source files)
-```
-
-**`call_check_report.txt`**（Pylint 输出）：
-```
-************* Module python_call_in_c
-example_output/all_py/python_call_in_c.py:9:0: E0602: Undefined variable 'add_v1' (undefined-variable)
-```
-
-**检测到的问题**：
-- C 代码定义了 `add_v2` 函数，但运行时尝试调用 `add_v1`
-- 这是一个动态命名错误（DynamicNameError），编译器无法检测
-- 运行时会触发 `NameError: name 'add_v1' is not defined`
-
-**对应的 JSON 报告**（`type_check_report.json`）：
-```json
-{
-  "parsed_issues": [{
-    "file": "example_output/all_py/python_call_in_c.py",
-    "line": 9,
-    "column": 1,
-    "severity": "error",
-    "code": "name-defined",
-    "message": "error: Name \"add_v1\" is not defined"
-  }],
-  "summary": {
-    "total_issues": 1,
-    "files_with_issues": 1
-  }
-}
-```
+| 文件 | 工具 | 检测内容 |
+|------|------|----------|
+| `type_check_report.txt/json` | Mypy | 类型错误、未定义变量、导入错误 |
+| `call_check_report.txt/json` | Pylint | 函数调用错误、参数不匹配、代码质量问题 |
 
 #### 5. LLM 交互记录（调试用）
-
-记录发送给 LLM 的 prompt 和返回的 response，便于调试和优化。
-
 | 文件 | 内容 |
 |------|------|
-| `module_registration_prompt.txt` | **模块注册分析 Prompt**：包含参数格式映射表、输出格式要求 |
-| `module_registration_response.txt` | **模块注册分析 Response**：LLM 返回的 JSON（解析后存入 `_llm.json`） |
-| `python_call_prompt.txt` | **Python 调用翻译 Prompt**：包含翻译规则、示例 |
-| `python_call_response.txt` | **Python 调用翻译 Response**：LLM 返回的 Python 代码 |
-
-**Prompt 示例**（`python_call_prompt.txt` 片段）：
-```
-## Task: Convert to Python Code
-1. Extract Python code strings from PyRun_String
-2. Extract function calls from PyObject_CallObject
-3. Resolve dynamic function names (e.g., from snprintf) - compute their actual values
-4. DO NOT translate C-only code (printf, fprintf, C variables)
-
-## CRITICAL REQUIREMENTS
-1. PRESERVE EXACT SEMANTICS: Keep errors exactly as-is, do not auto-correct
-2. ONLY TRANSLATE PYTHON C API CALLS
-```
+| `module_registration_prompt.txt` | 发送给 LLM 的模块注册分析 prompt |
+| `module_registration_response.txt` | LLM 返回的原始 JSON |
+| `python_call_prompt.txt` | 发送给 LLM 的 Python 调用翻译 prompt |
+| `python_call_response.txt` | LLM 返回的翻译结果 |
 
 ---
 
