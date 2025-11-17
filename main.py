@@ -11,7 +11,7 @@ from llm.parse_python_call_extraction import parse_python_call_file
 from checker.type_checker import MypyTypeChecker
 from checker.function_call_checker import PylintCallChecker
 from utils.logger import logger
-from utils.file_utils import collect_files
+from utils.file_utils import collect_files, merge_all_python_files
 
 
 def process_python_files(python_files: list[str], output_dir: str) -> Dict[str, Any]:
@@ -119,17 +119,18 @@ def process_python_calls(c_files: list[str], output_dir: str) -> Dict[str, Any]:
         return {}
 
 
-def check_python_types(output_dir: str) -> Dict[str, Any]:
-    py_dir = os.path.join(output_dir, "py")
+def check_python_types(output_dir: str, target_dir: str = None) -> Dict[str, Any]:
+    if target_dir is None:
+        target_dir = os.path.join(output_dir, "all_py")
     
-    if not os.path.exists(py_dir):
-        logger.info("未找到生成的 Python 接口文件目录 (py/)，跳过类型检查")
+    if not os.path.exists(target_dir):
+        logger.info("未找到 Python 文件目录，跳过类型检查")
         return {}
     
-    logger.info(f"正在对生成的 Python 接口文件进行类型检查...")
+    logger.info(f"正在对 Python 文件进行类型检查...")
     
     try:
-        checker = MypyTypeChecker(py_dir)
+        checker = MypyTypeChecker(target_dir)
         issues = checker.check_types()
         
         report_file = os.path.join(output_dir, "type_check_report.json")
@@ -162,17 +163,18 @@ def check_python_types(output_dir: str) -> Dict[str, Any]:
         return {}
 
 
-def check_function_calls(output_dir: str) -> Dict[str, Any]:
-    py_dir = os.path.join(output_dir, "py")
+def check_function_calls(output_dir: str, target_dir: str = None) -> Dict[str, Any]:
+    if target_dir is None:
+        target_dir = os.path.join(output_dir, "all_py")
     
-    if not os.path.exists(py_dir):
-        logger.info("未找到生成的 Python 接口文件目录 (py/)，跳过函数调用检查")
+    if not os.path.exists(target_dir):
+        logger.info("未找到 Python 文件目录，跳过函数调用检查")
         return {}
     
-    logger.info(f"正在对生成的 Python 接口文件进行函数调用检查...")
+    logger.info(f"正在对 Python 文件进行函数调用检查...")
     
     try:
-        checker = PylintCallChecker(py_dir)
+        checker = PylintCallChecker(target_dir)
         issues = checker.check_calls()
         
         json_report_file = os.path.join(output_dir, "call_check_report.json")
@@ -274,9 +276,15 @@ def main():
             import traceback
             traceback.print_exc()
     
-    check_python_types(output_dir)
-    
-    check_function_calls(output_dir)
+    if python_files or os.path.exists(os.path.join(output_dir, "py")):
+        logger.info("正在合并所有 Python 文件...")
+        all_py_dir = merge_all_python_files(python_files, output_dir)
+        logger.success(f"所有 Python 文件已合并到: {all_py_dir}")
+        
+        check_python_types(output_dir, all_py_dir)
+        check_function_calls(output_dir, all_py_dir)
+    else:
+        logger.info("没有 Python 文件需要检查")
     
     logger.info("" + "=" * 80)
     logger.success("分析完成!")
