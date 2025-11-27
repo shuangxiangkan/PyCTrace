@@ -105,8 +105,12 @@ def parse_python_call_file(input_file: str, output_file: str, model: str = "clau
     if current_call:
         call_codes.append('\n'.join(current_call))
     
-    all_python_code = []
     all_results = []
+    saved_files = []
+    
+    # 创建 py 输出目录
+    py_output_dir = output_dir / "py"
+    py_output_dir.mkdir(exist_ok=True)
     
     for idx, code in enumerate(call_codes, 1):
         logger.info(f"Parsing call block #{idx}...")
@@ -115,10 +119,17 @@ def parse_python_call_file(input_file: str, output_file: str, model: str = "clau
         if "error" not in result:
             python_code = result.get("python_code", "")
             if python_code:
-                all_python_code.append(f"# Block {idx}\n{python_code}\n")
+                # 每个 block 单独保存到一个文件
+                py_output_file = py_output_dir / f"python_call_in_c_{idx}.py"
+                with open(py_output_file, 'w', encoding='utf-8') as f:
+                    f.write(python_code)
+                saved_files.append(str(py_output_file))
+                logger.success(f"Python code saved to: {py_output_file}")
+                
                 all_results.append({
                     "block_id": idx,
-                    "python_code": python_code
+                    "python_code": python_code,
+                    "output_file": str(py_output_file)
                 })
         else:
             logger.error(f"Error parsing call block #{idx}: {result.get('error')}")
@@ -133,18 +144,8 @@ def parse_python_call_file(input_file: str, output_file: str, model: str = "clau
     
     logger.success(f"JSON result saved to: {output_file}")
     
-    if all_python_code:
-        py_output_dir = output_dir / "py"
-        py_output_dir.mkdir(exist_ok=True)
-        py_output_file = py_output_dir / "python_call_in_c.py"
-        
-        with open(py_output_file, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(all_python_code))
-        
-        logger.success(f"Python code saved to: {py_output_file}")
-    
     logger.success(f"Successfully parsed {len(call_codes)} call blocks")
-    logger.success(f"Extracted {len(all_python_code)} Python code blocks")
+    logger.success(f"Saved {len(saved_files)} Python code files")
 
 
 if __name__ == "__main__":
