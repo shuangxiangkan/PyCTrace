@@ -25,7 +25,6 @@ pylint==3.0.2
 pytest==7.4.3
 pytest-cov==4.1.0
 
-# LLM
-anthropic==0.21.3
-httpx<0.28.0
+# LLM - 使用 LiteLLM 统一调用多种 LLM
+litellm>=1.40.0
 python-dotenv==1.0.0

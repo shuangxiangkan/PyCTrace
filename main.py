@@ -208,21 +208,52 @@ def check_function_calls(output_dir: str, target_dir: str = None) -> Dict[str, A
         return {}
 
 
+def parse_args():
+    """解析命令行参数"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="PyCTrace - Python-C 跨语言函数调用分析工具",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python main.py /path/to/code
+  python main.py /path/to/code -o /path/to/output
+  python main.py /path/to/code --model gpt-4o
+  python main.py /path/to/code --model claude-sonnet-4-20250514
+
+支持的模型 (使用 LiteLLM，支持 100+ 模型):
+  Claude: claude-sonnet-4-20250514, claude-opus-4, claude-3-5-sonnet 等
+  OpenAI: gpt-4o, gpt-4-turbo, o1, o3 等
+  Gemini: gemini-1.5-pro, gemini-pro 等
+  更多模型请参考: https://docs.litellm.ai/docs/providers
+        """
+    )
+    
+    parser.add_argument("folder_path", help="要分析的代码文件夹路径")
+    parser.add_argument("-o", "--output", dest="output_dir", help="输出目录（默认为 <文件夹名>_output）")
+    parser.add_argument(
+        "-m", "--model", 
+        dest="model",
+        default=None,
+        help="LLM 模型名称（默认: claude-sonnet-4-20250514），支持 LiteLLM 所有模型"
+    )
+    
+    return parser.parse_args()
+
+
 def main():
-    if len(sys.argv) < 2:
-        logger.info("用法: python main.py <文件夹路径> [输出目录]")
-        logger.info("\n示例:")
-        logger.info("  python main.py /path/to/code")
-        logger.info("  python main.py /path/to/code /path/to/output")
-        sys.exit(1)
+    args = parse_args()
     
-    folder_path = sys.argv[1]
+    folder_path = args.folder_path
     
-    if len(sys.argv) > 2:
-        output_dir = sys.argv[2]
+    if args.output_dir:
+        output_dir = args.output_dir
     else:
         folder_name = os.path.basename(os.path.abspath(folder_path))
         output_dir = f"{folder_name}_output"
+    
+    model = args.model
     
     os.makedirs(output_dir, exist_ok=True)
     
@@ -231,6 +262,10 @@ def main():
     logger.info("=" * 80)
     logger.info(f"分析目标: {folder_path}")
     logger.info(f"输出目录: {output_dir}")
+    if model:
+        logger.info(f"使用模型: {model}")
+    else:
+        logger.info(f"使用模型: claude-sonnet-4-20250514 (默认)")
     
     logger.info("正在收集文件...")
     python_files, c_files = collect_files(folder_path)
@@ -257,7 +292,7 @@ def main():
                 txt_file = os.path.join(output_dir, "c_python_module_registrations.txt")
                 json_file = os.path.join(output_dir, "c_python_module_registrations_llm.json")
                 
-                parse_registration_file(txt_file, json_file)
+                parse_registration_file(txt_file, json_file, model=model)
                 
             except Exception as e:
                 logger.error(f"LLM 解析出错: {e}")
@@ -269,7 +304,7 @@ def main():
             call_txt_file = os.path.join(output_dir, "c_python_call_extraction.txt")
             call_json_file = os.path.join(output_dir, "c_python_call_extraction_llm.json")
             
-            parse_python_call_file(call_txt_file, call_json_file)
+            parse_python_call_file(call_txt_file, call_json_file, model=model)
             
         except Exception as e:
             logger.error(f"LLM 解析 Python 调用出错: {e}")

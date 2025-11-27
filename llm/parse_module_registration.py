@@ -7,14 +7,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.logger import logger
 
 try:
-    from .llm_client import ClaudeClient
+    from .llm_client import get_llm_client
     from .module_registration_prompts import (
         SYSTEM_PROMPT_MODULE_REGISTRATION, 
         get_module_registration_analysis_prompt
     )
     from .module_registration_schema import C_TYPE_TO_PYTHON_TYPE
 except ImportError:
-    from llm_client import ClaudeClient
+    from llm_client import get_llm_client
     from module_registration_prompts import (
         SYSTEM_PROMPT_MODULE_REGISTRATION, 
         get_module_registration_analysis_prompt
@@ -50,7 +50,7 @@ def clean_json_response(response_text: str) -> str:
     return response_text.strip()
 
 
-def parse_module_with_llm(code: str, client: ClaudeClient, output_dir: Path = None) -> dict:
+def parse_module_with_llm(code: str, client, output_dir: Path = None) -> dict:
     prompt = get_module_registration_analysis_prompt(code)
     
     try:
@@ -134,13 +134,24 @@ def save_python_stubs(json_data: dict, output_dir: Path):
         logger.success(f"Python 接口文件已生成: {output_file}")
 
 
-def parse_registration_file(input_file: str, output_file: str, model: str = "claude-sonnet-4-20250514"):
+def parse_registration_file(input_file: str, output_file: str, model: str = None):
+    """
+    解析模块注册文件
+    
+    Args:
+        input_file: 输入文件路径
+        output_file: 输出文件路径
+        model: LLM 模型名称，支持 Claude 和 OpenAI 模型
+               如果为 None，则使用默认模型 (claude-sonnet-4-20250514)
+               示例: "claude-sonnet-4-20250514", "gpt-4o", "gpt-4-turbo"
+    """
     logger.info(f"Reading file: {input_file}")
     
     with open(input_file, 'r', encoding='utf-8') as f:
         content = f.read()
     
-    client = ClaudeClient(model=model)
+    client = get_llm_client(model=model)
+    logger.info(f"Using model: {client.model}")
     
     output_dir = Path(output_file).parent
     output_dir.mkdir(parents=True, exist_ok=True)
