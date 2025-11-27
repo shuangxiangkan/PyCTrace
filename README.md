@@ -21,10 +21,12 @@ pip install -r requirements.txt
 
 ### 2. 配置 API Key
 
-创建 `.env` 文件：
+创建 `.env` 文件（根据使用的模型配置）：
 
 ```bash
-ANTHROPIC_API_KEY=your_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_key  # Claude 模型
+OPENAI_API_KEY=your_openai_key        # OpenAI 模型（可选）
+GEMINI_API_KEY=your_gemini_key        # Gemini 模型（可选）
 ```
 
 ### 3. 运行分析，以PyCTrace的example为例
@@ -189,8 +191,8 @@ PyCTrace 通过 **四步流程** 将 C 代码中的 Python 交互逻辑翻译为
 
 **切片结果**：只包含影响 Python 调用的代码，过滤无关的 C 逻辑（如日志、错误处理等）
 
-### 2️⃣ LLM 翻译（Claude API）
-将 C 代码片段发送给 Claude，执行两项翻译任务：
+### 2️⃣ LLM 翻译
+将 C 代码片段发送给 LLM（默认 Claude，支持 OpenAI/Gemini 等），执行两项翻译任务：
 
 **任务 1：解析模块注册**
 - 从 `PyMethodDef` 提取函数名映射（`"tick"` → `py_tick`）
@@ -245,17 +247,29 @@ PyCTrace 能够：
 ## 命令行选项
 
 ```bash
-python main.py <目录路径> [输出目录]
+python main.py <目录路径> [-o 输出目录] [-m 模型名称]
 ```
 
 **示例**：
 ```bash
-# 使用默认输出目录 (example_output/)
+# 使用默认模型 (claude-sonnet-4-20250514)
 python main.py example
 
 # 指定输出目录
-python main.py example my_output
+python main.py example -o my_output
+
+# 使用 OpenAI 模型
+python main.py example --model gpt-4o
+
+# 使用其他模型
+python main.py example --model gemini-1.5-pro
 ```
+
+**支持的模型**（使用 LiteLLM，支持 100+ 模型）：
+- Claude: `claude-sonnet-4-20250514`, `claude-opus-4`, `claude-3-5-sonnet` 等
+- OpenAI: `gpt-4o`, `gpt-4-turbo`, `o1`, `o3` 等
+- Gemini: `gemini-1.5-pro`, `gemini-pro` 等
+- 更多模型：https://docs.litellm.ai/docs/providers
 
 ---
 
@@ -264,7 +278,7 @@ python main.py example my_output
 | 依赖 | 用途 |
 |------|------|
 | `tree-sitter` | C/Python 代码解析 |
-| `anthropic` | Claude API 调用 |
+| `litellm` | 统一 LLM API 调用（支持 Claude/OpenAI/Gemini 等） |
 | `mypy` | Python 类型检查 |
 | `pylint` | Python 代码质量检查 |
 | `networkx` | 调用图生成 |
