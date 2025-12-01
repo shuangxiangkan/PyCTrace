@@ -174,19 +174,45 @@ class PythonCallExtractor:
                 return func_name
         return ""
     
+    # Python C API 调用函数（触发切片分析的入口点）
+    PYTHON_CALL_FUNCS = [
+        'PyObject_CallObject',
+        'PyObject_CallFunction',
+        'PyObject_CallMethod',
+        'PyObject_Call',
+        'PyObject_CallFunctionObjArgs',
+        'PyObject_CallMethodObjArgs',
+        'PyEval_CallObject',
+        'PyEval_CallFunction',
+        'PyEval_CallMethod'
+    ]
+    
+    # Python C API 相关函数（无论是否有 def-use 关系都要切出来）
+    PYTHON_API_FUNCS = [
+        'PyRun_String',
+        'PyRun_SimpleString',
+        'PyRun_File',
+        'PyRun_SimpleFile',
+        'PyImport_ImportModule',
+        'PyImport_Import',
+        'PyModule_GetDict',
+        'PyDict_SetItemString',
+        'PyDict_GetItemString',
+        'PyObject_GetAttrString',
+        'PyObject_SetAttrString',
+        'Py_BuildValue',
+        'PyArg_ParseTuple',
+    ]
+    
     def _is_python_call_function(self, function_name: str) -> bool:
-        python_call_funcs = [
-            'PyObject_CallObject',
-            'PyObject_CallFunction',
-            'PyObject_CallMethod',
-            'PyObject_Call',
-            'PyObject_CallFunctionObjArgs',
-            'PyObject_CallMethodObjArgs',
-            'PyEval_CallObject',
-            'PyEval_CallFunction',
-            'PyEval_CallMethod'
-        ]
-        return function_name in python_call_funcs
+        return function_name in self.PYTHON_CALL_FUNCS
+    
+    def _is_python_api_call(self, text: str) -> bool:
+        """检查语句是否包含 Python C API 调用"""
+        for func in self.PYTHON_API_FUNCS + self.PYTHON_CALL_FUNCS:
+            if func + '(' in text:
+                return True
+        return False
     
     def _extract_python_call_context(self, call_node: Node, code: str, ddg, func_start_line: int = 0) -> Optional[Dict]:
         """
@@ -240,6 +266,7 @@ class PythonCallExtractor:
         2. 遍历所有语句，检查其 def/use 是否包含 vars_to_track 中的变量
         3. 如果包含，添加该语句，并将该语句的所有 def/use 变量加入 vars_to_track
         4. 重复步骤 2-3，直到没有新语句被添加
+        5. 额外：无论 def-use 关系如何，所有 Python C API 调用语句都会被包含
         """
         vars_to_track = set(initial_vars)
         added_statements = set()
@@ -259,7 +286,11 @@ class PythonCallExtractor:
                 uses = ddg.uses.get(node_id, set())
                 all_vars = defs | uses
                 
-                if all_vars & vars_to_track:
+                # 条件1: def-use 相关
+                # 条件2: 包含 Python C API 调用（如 PyRun_String）
+                should_add = (all_vars & vars_to_track) or self._is_python_api_call(node.text)
+                
+                if should_add:
                     context.append({
                         'line': node.line,
                         'text': node.text,
