@@ -176,30 +176,30 @@ class PythonCallExtractor:
     
     # Python C API 调用函数（触发切片分析的入口点）
     PYTHON_CALL_FUNCS = [
-        'PyObject_CallObject',
-        'PyObject_CallFunction',
-        'PyObject_CallMethod',
-        'PyObject_Call',
-        'PyObject_CallFunctionObjArgs',
-        'PyObject_CallMethodObjArgs',
-        'PyEval_CallObject',
-        'PyEval_CallFunction',
-        'PyEval_CallMethod'
-    ]
+            'PyObject_CallObject',
+            'PyObject_CallFunction',
+            'PyObject_CallMethod',
+            'PyObject_Call',
+            'PyObject_CallFunctionObjArgs',
+            'PyObject_CallMethodObjArgs',
+            'PyEval_CallObject',
+            'PyEval_CallFunction',
+            'PyEval_CallMethod'
+        ]
     
     # Python C API 相关函数（无论是否有 def-use 关系都要切出来）
     PYTHON_API_FUNCS = [
-        'PyRun_String',
-        'PyRun_SimpleString',
-        'PyRun_File',
+            'PyRun_String',
+            'PyRun_SimpleString',
+            'PyRun_File',
         'PyRun_SimpleFile',
-        'PyImport_ImportModule',
-        'PyImport_Import',
+            'PyImport_ImportModule',
+            'PyImport_Import',
         'PyModule_GetDict',
-        'PyDict_SetItemString',
-        'PyDict_GetItemString',
+            'PyDict_SetItemString',
+            'PyDict_GetItemString',
         'PyObject_GetAttrString',
-        'PyObject_SetAttrString',
+            'PyObject_SetAttrString',
         'Py_BuildValue',
         'PyArg_ParseTuple',
     ]
@@ -437,6 +437,11 @@ def format_call_info_text(result: Dict) -> str:
     lines = []
     python_calls = result.get('python_calls', [])
     
+    def is_function_signature(text: str) -> bool:
+        """检测是否是函数签名（有括号，无分号，无赋值）"""
+        text = text.strip()
+        return '(' in text and ')' in text and ';' not in text and '=' not in text
+    
     for i, call in enumerate(python_calls, 1):
         lines.append("")
         lines.append("=" * 80)
@@ -445,8 +450,17 @@ def format_call_info_text(result: Dict) -> str:
         lines.append("")
         
         if call.get('context_statements'):
-            for stmt in call['context_statements']:
-                lines.append(stmt['text'])
+            stmts = call['context_statements']
+            if stmts and is_function_signature(stmts[0]['text']):
+                # 第一行是函数签名，添加花括号
+                lines.append(stmts[0]['text'] + " {")
+                for stmt in stmts[1:]:
+                    lines.append(stmt['text'])
+                lines.append("}")
+            else:
+                # 没有函数签名，直接输出
+                for stmt in stmts:
+                    lines.append(stmt['text'])
             lines.append("")
         
         if call.get('function_definitions'):
