@@ -11,43 +11,38 @@ The C code below is **program-sliced** – it contains only statements relevant 
 The code may have incomplete or syntactically invalid fragments for example, missing braces or other structural elements), due to slicing, However, the **semantics are complete** for understanding the Python behavior. You only need to perform a faithful, mechanical translation of the sliced Python-related C code into Python. Do not attempt to repair or complete the translated Python code, even if it results in incorrect or non-functional Python.
 
 
-## Examples
-
-### Example 1: Without function signature
+## Example
 ```c
-const char *py = "def add(a,b):\\n    return a+b\\n";
+PyObject *g = PyModule_GetDict(PyImport_AddModule("__main__"));
+const char *py = "import host\\n"
+                   "class Service:\\n"
+                   "    def run(self, a, k):\\n"
+                   "        print('P')\\n"
+                   "        host.tick(k)\\n"
+                   "        return a*3\\n";
 PyRun_String(py, Py_file_input, g, g);
-PyObject *fn = PyDict_GetItemString(g, "add");
-PyObject *args = Py_BuildValue("(ii)", 10, 20);
+PyObject *cls = PyDict_GetItemString(g, "Service");
+PyObject *fn = PyObject_GetAttrString(cls, "run");
+PyObject *args = Py_BuildValue("(ii)", 9, 4);
 PyObject *ret = PyObject_CallObject(fn, args);
+if(!ret)
+long v = PyLong_AsLong(ret);
+printf("OK:%ld COUNT:%lu\\n", v, g_counter);
+Py_DECREF(ret);
 ```
 
 Output:
 ```json
 {{
-  "python_code": "def add(a, b):\\n    return a + b\\n\\nadd(10, 20)"
+  "python_code": "import host\\nclass Service:\\n    def run(self, a, k):\\n        print('P')\\n        host.tick(k)\\n        return a*3\\n\\ncls = Service\\nfn = cls.run\\nret = fn(9, 4)\\nv = ret"
 }}
 ```
 
-### Example 2: With function signature (program-sliced code)
-```c
-long run_task(int a, int b, int k) {{
-PyRun_SimpleString("import sys; sys.path.insert(0, '.')");
-PyObject *m = PyImport_ImportModule("p1");
-PyObject *f = PyObject_GetAttrString(m, "combine");
-PyObject *args = Py_BuildValue("(iii)", a, b, k);
-PyObject *r = PyObject_CallObject(f, args);
-long v = PyLong_AsLong(r);
-return v;
-}}
-```
-
-Output:
-```json
-{{
-  "python_code": "def run_task(a, b, k):\\n    import sys\\n    sys.path.insert(0, '.')\\n    import p1\\n    v = p1.combine(a, b, k)\\n    return v"
-}}
-```
+**Translation correctness:**
+- PyRun_String → defines Service class
+- PyDict_GetItemString/PyObject_GetAttrString → cls = Service, fn = cls.run
+- Py_BuildValue("(ii)", 9, 4) + PyObject_CallObject → fn(9, 4) (**preserves bug: missing self**)
+- Ignores pure C code: printf, Py_DECREF, g_counter, if(!ret)
    
    
 ## C Code
@@ -58,18 +53,18 @@ Output:
 
 ## CRITICAL REQUIREMENTS
 
-1. **FAITHFUL TRANSLATION - DO NOT modify, fix, or optimize**:
+1. **SCOPE**:
+   - ONLY translate Python C API calls
+   - IGNORE pure C code: printf, fprintf, malloc，,etc.
+   - IGNORE C-side logging or debugging code that doesn't affect Python behavior
+   
+2. **FAITHFUL TRANSLATION - DO NOT modify, fix, or optimize**:
    - Translate Python API calls literally and mechanically
    - Keep function names, module names, attribute names exactly as they appear in C
    - Keep argument counts exactly as specified in `Py_BuildValue` format strings
    - DO NOT infer, add, or remove any objects or parameters
    - DO NOT create instances unless C code explicitly calls the class (e.g., `PyObject_CallObject(cls, NULL)`)
    - Resolve dynamic names from C logic (e.g., snprintf) only if the value is determinable
-   - If C code has issues, translate them as-is - your job is translation, not correction
-
-2. **SCOPE**:
-   - ONLY translate Python C API calls
-   - IGNORE pure C code: printf, fprintf, malloc, C variables like g_counter, etc.
    
 ## Output Format Requirements
 
