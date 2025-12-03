@@ -65,6 +65,7 @@ Output:
    - DO NOT infer, add, or remove any objects or parameters
    - DO NOT create instances unless C code explicitly calls the class (e.g., `PyObject_CallObject(cls, NULL)`)
    - Resolve dynamic names from C logic (e.g., snprintf) only if the value is determinable
+   - If translated Python code uses parameters from a C function signature, translate the C function signature to a Python function definition (e.g., `long run_task(int a, int b)` → `def run_task(a, b):` with corresponding `return`)
    
 ## Output Format Requirements
 
