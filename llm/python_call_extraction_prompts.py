@@ -65,7 +65,28 @@ Output:
    - DO NOT infer, add, or remove any objects or parameters
    - DO NOT create instances unless C code explicitly calls the class (e.g., `PyObject_CallObject(cls, NULL)`)
    - Resolve dynamic names from C logic (e.g., snprintf) only if the value is determinable
-   - If translated Python code uses parameters from a C function signature, translate the C function signature to a Python function definition (e.g., `long run_task(int a, int b)` → `def run_task(a, b):` with corresponding `return`)
+   - If translated Python code uses parameters from a C function signature, translate the C function signature to a Python function definition with type annotations (e.g., `long run_task(int a, int b)` → `def run_task(a: int, b: int) -> int:` with corresponding `return`)
+
+3. **ARGUMENT TYPE AND ARITY FROM FORMAT STRING** (applies to `Py_BuildValue`, `PyArg_ParseTuple`, etc.):
+   - The **format string is the source of truth** for argument count and types, NOT the actual C variables
+   - Add **explicit type annotations** to each argument based on format specifiers
+   - Format mapping: `i/l` → `int`, `s/z` → `str`, `f/d` → `float`, `O/N` → keep as-is
+   - **Type mismatch example**: `Py_BuildValue("(isi)", a, b, k)` translates to:
+     ```python
+     arg1: int = a    # 'i' → int
+     arg2: str = b    # 's' → str (preserves type bug)
+     arg3: int = k    # 'i' → int
+     r = f(arg1, arg2, arg3)
+     ```
+   - **Arity mismatch example**: `Py_BuildValue("(iiii)", a, b, k)` has 4 format specifiers but 3 C args, translate as:
+     ```python
+     arg1: int = a
+     arg2: int = b
+     arg3: int = k
+     arg4: int = ???  # missing argument - use placeholder or None
+     r = f(arg1, arg2, arg3, arg4)  # preserves arity bug: 4 args
+     ```
+   - **DO NOT auto-correct** type/arity mismatches
    
 ## Output Format Requirements
 
