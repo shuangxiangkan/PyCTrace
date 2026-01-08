@@ -223,6 +223,7 @@ def parse_args():
   python main.py /path/to/code --model claude-sonnet-4-20250514
 
 支持的模型 (使用 LiteLLM，支持 100+ 模型):
+  DeepSeek: deepseek/deepseek-chat (默认)
   Claude: claude-sonnet-4-20250514, claude-opus-4, claude-3-5-sonnet 等
   OpenAI: gpt-4o, gpt-4-turbo, o1, o3 等
   Gemini: gemini-1.5-pro, gemini-pro 等
@@ -236,7 +237,7 @@ def parse_args():
         "-m", "--model", 
         dest="model",
         default=None,
-        help="LLM 模型名称（默认: claude-sonnet-4-20250514），支持 LiteLLM 所有模型"
+        help="LLM 模型名称（默认: deepseek/deepseek-chat），支持 LiteLLM 所有模型"
     )
     
     return parser.parse_args()
@@ -265,7 +266,7 @@ def main():
     if model:
         logger.info(f"使用模型: {model}")
     else:
-        logger.info(f"使用模型: claude-sonnet-4-20250514 (默认)")
+        logger.info(f"使用模型: deepseek/deepseek-chat (默认)")
     
     logger.info("正在收集文件...")
     python_files, c_files = collect_files(folder_path)

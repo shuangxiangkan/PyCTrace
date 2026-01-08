@@ -8,8 +8,9 @@ load_dotenv()
 # 自动丢弃不支持的参数（如某些模型不支持 temperature=0）
 litellm.drop_params = True
 
-# 默认模型
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+# 默认模型（优先使用 DeepSeek，其次使用 Claude）
+DEFAULT_MODEL = "deepseek/deepseek-chat"
+FALLBACK_MODEL = "claude-sonnet-4-20250514"
 
 
 def _setup_api_keys():
@@ -22,6 +23,19 @@ def _setup_api_keys():
         os.environ["ANTHROPIC_API_KEY"] = os.getenv("CLAUDE_API_KEY")
 
 
+def _get_default_model():
+    """
+    根据可用的 API Key 选择默认模型
+    优先级: DeepSeek > Claude
+    """
+    if os.getenv("DEEPSEEK_API_KEY"):
+        return DEFAULT_MODEL  # deepseek/deepseek-chat
+    elif os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY"):
+        return FALLBACK_MODEL  # claude-sonnet-4-20250514
+    else:
+        return DEFAULT_MODEL  # 默认返回 DeepSeek，让后续验证报错
+
+
 # 初始化时设置 API Keys
 _setup_api_keys()
 
@@ -31,12 +45,14 @@ class LLMClient:
     统一的 LLM 客户端，使用 LiteLLM 实现
     
     支持的模型提供商：
+    - DeepSeek: deepseek/deepseek-chat (默认)
     - Anthropic: claude-sonnet-4-20250514, claude-3-opus-20240229 等
     - OpenAI: gpt-4o, gpt-4-turbo, o1, o3 等
     - Google: gemini-pro, gemini-1.5-pro 等
     - 以及 LiteLLM 支持的其他 100+ 模型
     
     环境变量配置 (.env):
+        DEEPSEEK_API_KEY=your_deepseek_key    # DeepSeek (默认优先)
         ANTHROPIC_API_KEY=your_anthropic_key  # 或 CLAUDE_API_KEY
         OPENAI_API_KEY=your_openai_key
         GEMINI_API_KEY=your_gemini_key (可选)
@@ -52,7 +68,12 @@ class LLMClient:
         """验证模型对应的 API Key 是否存在"""
         model_lower = self.model.lower()
         
-        if model_lower.startswith("claude"):
+        if "deepseek" in model_lower:
+            if not os.getenv("DEEPSEEK_API_KEY"):
+                raise ValueError(
+                    "DeepSeek API Key not found. Please set DEEPSEEK_API_KEY in .env file."
+                )
+        elif model_lower.startswith("claude"):
             if not os.getenv("ANTHROPIC_API_KEY"):
                 raise ValueError(
                     "Anthropic API Key not found. "
@@ -126,12 +147,14 @@ def get_llm_client(model: str = None) -> LLMClient:
     获取 LLM 客户端
     
     Args:
-        model: 模型名称，如果为 None 则使用默认模型 (claude-sonnet-4-20250514)
+        model: 模型名称，如果为 None 则根据可用 API Key 自动选择
+               优先使用 DeepSeek，其次使用 Claude
     
     Returns:
         LLM 客户端实例
     
     支持的模型:
+        DeepSeek: deepseek/deepseek-chat (默认)
         Anthropic: claude-sonnet-4-20250514, claude-opus-4, claude-3-5-sonnet 等
         OpenAI: gpt-4o, gpt-4-turbo, o1, o3 等
         Google: gemini-pro, gemini-1.5-pro 等
@@ -139,5 +162,5 @@ def get_llm_client(model: str = None) -> LLMClient:
         更多模型请参考: https://docs.litellm.ai/docs/providers
     """
     if model is None:
-        model = DEFAULT_MODEL
+        model = _get_default_model()
     return LLMClient(model=model)
