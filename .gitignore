@@ -52,7 +52,3 @@ test/python_output/
 .env
 *_output/
 test/
-
-
-C_with_python/
-benchmark/
